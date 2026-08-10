@@ -42,13 +42,13 @@ public interface MetaStore {
     // ============================================================
     // Users
     // ============================================================
-    User getUserByLogin(String userName, String md5Pwd);
+    User getUserByLogin(String userName);
     User getUserByName(String userName);
     List<User> listUsers();
     void createUser(String userName, String userPwd, int role, String note);
     void deleteUserByName(String userName);
-    void resetPassword(String userName, String md5Pwd);
-    void updatePassword(String userName, String oldMd5Pwd, String newMd5Pwd);
+    void resetPassword(String userName, String userPwdHash);
+    void updatePassword(String userName, String newPwdHash);
 
     // ============================================================
     // API tokens

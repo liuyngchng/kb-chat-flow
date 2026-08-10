@@ -103,7 +103,7 @@ func (s *MySQLStore) migrate() error {
 		CREATE TABLE IF NOT EXISTS users (
 			uid BIGINT AUTO_INCREMENT PRIMARY KEY,
 			user_name VARCHAR(255) NOT NULL UNIQUE,
-			user_pwd VARCHAR(64) NOT NULL DEFAULT '',
+			user_pwd VARCHAR(255) NOT NULL DEFAULT '',
 			role INT NOT NULL DEFAULT 0,
 			note VARCHAR(512) NOT NULL DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -454,11 +454,11 @@ func (s *MySQLStore) UpsertPrompt(name, value string, uid int) error {
 // 用户 (users)
 // ============================================================
 
-// GetUserByLogin 按用户名和密码 MD5 查询用户
-func (s *MySQLStore) GetUserByLogin(userName, md5Pwd string) (*model.User, error) {
+// GetUserByLogin 按用户名查询用户（密码验证由 handler 层用 bcrypt 完成）
+func (s *MySQLStore) GetUserByLogin(userName string) (*model.User, error) {
 	row := s.db.QueryRow(
-		"SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ? AND user_pwd = ?",
-		userName, md5Pwd,
+		"SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ?",
+		userName,
 	)
 	var u model.User
 	err := row.Scan(&u.UID, &u.UserName, &u.UserPwd, &u.Role, &u.Note)
@@ -489,6 +489,7 @@ func (s *MySQLStore) GetUserByName(userName string) (*model.User, error) {
 }
 
 // seedUsers 种子内置用户（仅当 users 表为空时）
+// 密码使用 bcrypt 哈希，密码与用户名相同
 func (s *MySQLStore) seedUsers() error {
 	var count int
 	err := s.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
@@ -513,10 +514,13 @@ func (s *MySQLStore) seedUsers() error {
 	}
 
 	for _, u := range builtinUsers {
-		pwd := md5Hash(u.userName)
+		pwdHash, err := hashPassword(u.userName)
+		if err != nil {
+			return fmt.Errorf("种子用户 %s 密码哈希失败: %w", u.userName, err)
+		}
 		if _, err := s.db.Exec(
 			"INSERT INTO users (user_name, user_pwd, role, note) VALUES (?, ?, ?, ?)",
-			u.userName, pwd, u.role, u.note,
+			u.userName, pwdHash, u.role, u.note,
 		); err != nil {
 			return fmt.Errorf("种子用户 %s 插入失败: %w", u.userName, err)
 		}
@@ -564,27 +568,23 @@ func (s *MySQLStore) DeleteUserByName(userName string) error {
 	return err
 }
 
-// ResetPassword 重置用户密码
-func (s *MySQLStore) ResetPassword(userName, md5Pwd string) error {
+// ResetPassword 重置用户密码（直接设置哈希后的密码）
+func (s *MySQLStore) ResetPassword(userName, pwdHash string) error {
 	_, err := s.db.Exec(
 		"UPDATE users SET user_pwd = ? WHERE user_name = ?",
-		md5Pwd, userName,
+		pwdHash, userName,
 	)
 	return err
 }
 
-// UpdatePassword 修改密码（需验证旧密码）
-func (s *MySQLStore) UpdatePassword(userName, oldMd5Pwd, newMd5Pwd string) error {
-	result, err := s.db.Exec(
-		"UPDATE users SET user_pwd = ? WHERE user_name = ? AND user_pwd = ?",
-		newMd5Pwd, userName, oldMd5Pwd,
+// UpdatePassword 修改密码（直接设置新哈希，密码验证由 handler 层用 bcrypt 完成）
+func (s *MySQLStore) UpdatePassword(userName, newPwdHash string) error {
+	_, err := s.db.Exec(
+		"UPDATE users SET user_pwd = ? WHERE user_name = ?",
+		newPwdHash, userName,
 	)
 	if err != nil {
 		return err
-	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		return fmt.Errorf("旧密码不正确")
 	}
 	return nil
 }

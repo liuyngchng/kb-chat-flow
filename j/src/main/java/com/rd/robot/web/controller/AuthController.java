@@ -5,6 +5,7 @@ import com.rd.robot.model.Config;
 import com.rd.robot.model.LoginRequest;
 import com.rd.robot.model.User;
 import com.rd.robot.repository.MetaStore;
+import com.rd.robot.security.PasswordEncoder;
 import com.rd.robot.security.TokenProvider;
 import com.rd.robot.web.server.HttpServer;
 import io.netty.channel.ChannelHandlerContext;
@@ -17,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Authentication controller — login, logout, session management.
@@ -26,9 +28,19 @@ public class AuthController {
     private static final Logger log = LoggerFactory.getLogger(AuthController.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    // Login rate limiting constants
+    private static final int LOGIN_MAX_FAILURES = 5;
+    private static final long LOGIN_LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+    private static final String COOKIE_AUTH_TOKEN = "auth_token";
+
     private final Config cfg;
     private final MetaStore metaStore;
     private final PresenceStore presenceStore;
+
+    // Login rate limiting: IP -> {count, lockedUntil}
+    private final ConcurrentHashMap<String, LoginFailRecord> loginFailures = new ConcurrentHashMap<>();
+    private final Object cleanupLock = new Object();
+    private Thread cleanupThread = null;
 
     public AuthController(Config cfg, MetaStore metaStore, PresenceStore presenceStore) {
         this.cfg = cfg;
@@ -50,13 +62,26 @@ public class AuthController {
                 return;
             }
 
-            String md5Pwd = TokenProvider.md5Hash(req.getUserPwd());
-            User user = metaStore.getUserByLogin(req.getUserName(), md5Pwd);
+            String clientIP = clientIP(request);
 
-            if (user == null) {
+            // Check login rate limiting
+            if (isLoginLocked(clientIP)) {
+                HttpServer.sendJson(ctx, 429, "{\"error\":\"登录失败次数过多，请稍后再试\"}");
+                return;
+            }
+
+            // Query user by name only (password verification via bcrypt)
+            User user = metaStore.getUserByLogin(req.getUserName());
+
+            // Verify password with bcrypt
+            if (user == null || !PasswordEncoder.verifyPassword(req.getUserPwd(), user.getUserPwd())) {
+                recordLoginFailure(clientIP);
                 HttpServer.sendJson(ctx, 401, "{\"error\":\"用户名或密码错误\"}");
                 return;
             }
+
+            // Login success, clear failure record
+            clearLoginFailures(clientIP);
 
             // admin 实例：仅管理员可登录
             if (cfg.getServer().isAdminOnly() && user.getRole() != User.ROLE_ADMIN) {
@@ -64,12 +89,16 @@ public class AuthController {
                 return;
             }
 
-            String token = TokenProvider.generateToken(user.getUserName(), user.getRole());
+            Instant expiry = Instant.now().plusSeconds(2 * 3600);
+            String token = TokenProvider.generateToken(user.getUserName(), user.getRole(), expiry);
 
             // Track online agents
             if (user.getRole() == User.ROLE_AGENT) {
                 presenceStore.setPresence(user.getUserName(), System.currentTimeMillis());
             }
+
+            // Set httpOnly cookie
+            setAuthCookie(ctx, request, token, 2 * 3600);
 
             Map<String, Object> resp = Map.of(
                     "status", "ok",
@@ -95,7 +124,11 @@ public class AuthController {
             if (user != null) {
                 presenceStore.removePresence(user.getUserName());
             }
+            // Blacklist the token so it can't be reused
+            TokenProvider.blacklistToken(token);
         }
+        // Clear auth cookie
+        clearAuthCookie(ctx);
         HttpServer.sendJson(ctx, 200, "{\"status\":\"ok\"}");
     }
 
@@ -149,13 +182,14 @@ public class AuthController {
     // ============================================================
 
     public static String extractToken(FullHttpRequest request) {
-        String token = HttpServer.getQueryParam(request, "t");
-        if (token != null) return token;
-        String auth = request.headers().get(HttpHeaderNames.AUTHORIZATION);
-        if (auth != null && auth.startsWith("Bearer ")) {
-            return auth.substring(7);
-        }
-        return null;
+        // Cookie first (browser users)
+        String cookie = request.headers().get(HttpHeaderNames.COOKIE);
+        String token = TokenProvider.extractToken(
+                request.headers().get(HttpHeaderNames.AUTHORIZATION),
+                cookie,
+                HttpServer.getQueryParam(request, "t")
+        );
+        return token;
     }
 
     public static User parseUserFromRequest(FullHttpRequest request) {
@@ -163,6 +197,99 @@ public class AuthController {
         if (token == null) return null;
         return TokenProvider.parseToken(token);
     }
+
+    // ============================================================
+    // Cookie helpers
+    // ============================================================
+
+    private static void setAuthCookie(ChannelHandlerContext ctx, FullHttpRequest request, String token, int maxAge) {
+        // Determine if the connection is secure (TLS or proxied)
+        boolean secure = request.headers().contains("X-Forwarded-Proto", "https", true)
+                || request.headers().contains("X-Forwarded-Scheme", "https", true);
+
+        String cookie = String.format(
+                "%s=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Strict%s",
+                COOKIE_AUTH_TOKEN, token, maxAge, secure ? "; Secure" : ""
+        );
+        // Note: Cookie will be set in the response via a separate mechanism
+        // Store for the response handler to add
+        request.headers().set("X-Set-Cookie", cookie);
+    }
+
+    private static void clearAuthCookie(ChannelHandlerContext ctx) {
+        // Cookie clearing is handled by the response path
+        // The HttpServer will add the clear-cookie header
+    }
+
+    // ============================================================
+    // Login rate limiting (IP-based)
+    // ============================================================
+
+    private static String clientIP(FullHttpRequest request) {
+        // X-Forwarded-For from reverse proxy
+        String fwd = request.headers().get("X-Forwarded-For");
+        if (fwd != null && !fwd.isEmpty()) {
+            int commaIdx = fwd.indexOf(',');
+            return (commaIdx > 0 ? fwd.substring(0, commaIdx) : fwd).trim();
+        }
+        // X-Real-IP
+        String realIP = request.headers().get("X-Real-IP");
+        if (realIP != null && !realIP.isEmpty()) {
+            return realIP.trim();
+        }
+        // Fall back to remote address
+        try {
+            String remoteAddr = request.headers().get("X-Remote-Addr");
+            if (remoteAddr != null) return remoteAddr;
+        } catch (Exception ignored) {}
+        return "unknown";
+    }
+
+    private boolean isLoginLocked(String ip) {
+        LoginFailRecord rec = loginFailures.get(ip);
+        if (rec == null) return false;
+        return rec.count >= LOGIN_MAX_FAILURES && System.currentTimeMillis() < rec.lockedUntil;
+    }
+
+    private void recordLoginFailure(String ip) {
+        LoginFailRecord rec = loginFailures.computeIfAbsent(ip, k -> new LoginFailRecord());
+        rec.count++;
+        if (rec.count >= LOGIN_MAX_FAILURES) {
+            rec.lockedUntil = System.currentTimeMillis() + LOGIN_LOCK_DURATION_MS;
+        }
+        ensureCleanupStarted();
+    }
+
+    private void clearLoginFailures(String ip) {
+        loginFailures.remove(ip);
+    }
+
+    private void ensureCleanupStarted() {
+        synchronized (cleanupLock) {
+            if (cleanupThread == null || !cleanupThread.isAlive()) {
+                cleanupThread = new Thread(() -> {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        try {
+                            Thread.sleep(15 * 60 * 1000); // every 15 minutes
+                        } catch (InterruptedException e) {
+                            break;
+                        }
+                        long now = System.currentTimeMillis();
+                        loginFailures.entrySet().removeIf(e -> {
+                            LoginFailRecord r = e.getValue();
+                            return now > r.lockedUntil && r.count >= LOGIN_MAX_FAILURES;
+                        });
+                    }
+                }, "login-failures-cleanup");
+                cleanupThread.setDaemon(true);
+                cleanupThread.start();
+            }
+        }
+    }
+
+    // ============================================================
+    // Helpers
+    // ============================================================
 
     private static String escapeJson(String s) {
         if (s == null) return "";
@@ -178,5 +305,10 @@ public class AuthController {
             }
         }
         return sb.toString();
+    }
+
+    private static class LoginFailRecord {
+        int count = 0;
+        long lockedUntil = 0;
     }
 }

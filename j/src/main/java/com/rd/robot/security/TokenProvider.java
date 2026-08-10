@@ -12,6 +12,8 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * HMAC-SHA256 token authentication.
@@ -25,6 +27,11 @@ public class TokenProvider {
     private static final byte[] DEFAULT_SECRET = "kb-chat-flow_secret_2026".getBytes(StandardCharsets.UTF_8);
     private static final long TOKEN_TTL_SECONDS = 2 * 3600; // 2 hours
     private static final long API_TOKEN_TTL_SECONDS = 2 * 3600; // 2 hours
+
+    /** Token blacklist: signature -> expiry time */
+    private static final Map<String, Instant> TOKEN_BLACKLIST = new ConcurrentHashMap<>();
+    private static final Object CLEANUP_LOCK = new Object();
+    private static Thread cleanupThread = null;
 
     /** 运行时密钥（集群模式下从配置注入，单例模式为空则使用默认值） */
     private static byte[] secret = null;
@@ -52,8 +59,8 @@ public class TokenProvider {
         long expiryUnix = expiry.getEpochSecond();
         String payload = userName + "|" + role + "|" + expiryUnix;
 
-        // HMAC-SHA256, take first 16 hex chars
-        String sig = hmacSha256(payload).substring(0, 16);
+        // HMAC-SHA256, full hex signature
+        String sig = hmacSha256(payload);
         String full = payload + "|" + sig;
 
         return Base64.getUrlEncoder().withoutPadding().encodeToString(full.getBytes(StandardCharsets.UTF_8));
@@ -74,7 +81,7 @@ public class TokenProvider {
     }
 
     /**
-     * Parse and validate a token. Returns null if invalid or expired.
+     * Parse and validate a token. Returns null if invalid, expired, or blacklisted.
      */
     public static User parseToken(String tokenStr) {
         if (tokenStr == null || tokenStr.isEmpty()) return null;
@@ -91,12 +98,15 @@ public class TokenProvider {
             long expiryUnix = Long.parseLong(parts[2]);
             String sig = parts[3];
 
+            // Check if token is blacklisted (logged out)
+            if (TOKEN_BLACKLIST.containsKey(sig)) return null;
+
             // Check expiry
             if (Instant.now().getEpochSecond() > expiryUnix) return null;
 
             // Verify signature
             String payload = userName + "|" + role + "|" + expiryUnix;
-            String expectedSig = hmacSha256(payload).substring(0, 16);
+            String expectedSig = hmacSha256(payload);
 
             if (!sig.equals(expectedSig)) return null;
 
@@ -111,11 +121,62 @@ public class TokenProvider {
     }
 
     /**
-     * Extract the token string from an Authorization header or URL parameter.
-     * Priority: URL param "t" > Authorization: Bearer header
+     * Blacklist a token after logout so it cannot be reused.
+     *
+     * @param tokenStr the raw token string
      */
-    public static String extractToken(String authHeader, String queryParam) {
-        // URL param first
+    public static void blacklistToken(String tokenStr) {
+        if (tokenStr == null || tokenStr.isEmpty()) return;
+        try {
+            byte[] data = Base64.getUrlDecoder().decode(tokenStr);
+            String decoded = new String(data, StandardCharsets.UTF_8);
+            String[] parts = decoded.split("\\|", 4);
+            if (parts.length == 4) {
+                long expiryUnix = Long.parseLong(parts[2]);
+                TOKEN_BLACKLIST.put(parts[3], Instant.ofEpochSecond(expiryUnix));
+                ensureCleanupStarted();
+            }
+        } catch (Exception ignored) {
+            // Invalid token, nothing to blacklist
+        }
+    }
+
+    /**
+     * Start a background thread to clean up expired blacklist entries.
+     */
+    private static void ensureCleanupStarted() {
+        synchronized (CLEANUP_LOCK) {
+            if (cleanupThread == null || !cleanupThread.isAlive()) {
+                cleanupThread = new Thread(() -> {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        try {
+                            Thread.sleep(10 * 60 * 1000); // every 10 minutes
+                        } catch (InterruptedException e) {
+                            break;
+                        }
+                        Instant now = Instant.now();
+                        TOKEN_BLACKLIST.entrySet().removeIf(e -> now.isAfter(e.getValue()));
+                    }
+                }, "token-blacklist-cleanup");
+                cleanupThread.setDaemon(true);
+                cleanupThread.start();
+            }
+        }
+    }
+
+    /**
+     * Extract the token string from an Authorization header, Cookie header, or URL parameter.
+     * Priority: Cookie "auth_token" > URL param "t" > Authorization: Bearer header
+     */
+    public static String extractToken(String authHeader, String cookieHeader, String queryParam) {
+        // Cookie first (browser users)
+        if (cookieHeader != null && !cookieHeader.isEmpty()) {
+            String tokenFromCookie = extractCookieValue(cookieHeader, "auth_token");
+            if (tokenFromCookie != null && !tokenFromCookie.isEmpty()) {
+                return tokenFromCookie;
+            }
+        }
+        // URL param
         if (queryParam != null && !queryParam.isEmpty()) {
             return queryParam;
         }
@@ -127,20 +188,22 @@ public class TokenProvider {
     }
 
     /**
-     * Compute MD5 hash of a string (for password verification).
+     * Extract the token string from an Authorization header or URL parameter (backward-compatible).
      */
-    public static String md5Hash(String s) {
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
-            byte[] digest = md.digest(s.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : digest) {
-                sb.append(String.format("%02x", b));
+    public static String extractToken(String authHeader, String queryParam) {
+        return extractToken(authHeader, null, queryParam);
+    }
+
+    private static String extractCookieValue(String cookieHeader, String cookieName) {
+        if (cookieHeader == null || cookieHeader.isEmpty()) return null;
+        String[] cookies = cookieHeader.split(";");
+        for (String cookie : cookies) {
+            String[] kv = cookie.trim().split("=", 2);
+            if (kv.length == 2 && kv[0].equals(cookieName)) {
+                return kv[1];
             }
-            return sb.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("MD5 计算失败", e);
         }
+        return null;
     }
 
     private static String hmacSha256(String data) {

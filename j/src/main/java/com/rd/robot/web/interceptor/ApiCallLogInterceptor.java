@@ -9,6 +9,8 @@ import io.netty.util.CharsetUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Set;
+
 /**
  * Interceptor that logs API calls for API token users.
  * Records request body, response body, status code, and error messages.
@@ -16,6 +18,13 @@ import org.slf4j.LoggerFactory;
 public class ApiCallLogInterceptor {
 
     private static final Logger log = LoggerFactory.getLogger(ApiCallLogInterceptor.class);
+
+    // Sensitive paths: request body should not be logged
+    private static final Set<String> SENSITIVE_PATHS = Set.of(
+            "/api/login",
+            "/api/user/password",
+            "/api/users"
+    );
 
     private final MetaStore metaStore;
 
@@ -42,18 +51,24 @@ public class ApiCallLogInterceptor {
         String authHeader = request.headers().get(HttpHeaderNames.AUTHORIZATION);
         if (authHeader == null || !authHeader.startsWith("Bearer ")) return;
 
-        String reqBody = request.content().toString(CharsetUtil.UTF_8);
-        if (reqBody.length() > 1000) reqBody = reqBody.substring(0, 1000) + "...";
+        String path = request.uri();
+        int queryIdx = path.indexOf('?');
+        if (queryIdx >= 0) path = path.substring(0, queryIdx);
+
+        String reqBody;
+        // Redact sensitive paths
+        if (SENSITIVE_PATHS.contains(path)) {
+            reqBody = "[敏感数据已脱敏]";
+        } else {
+            reqBody = request.content().toString(CharsetUtil.UTF_8);
+            if (reqBody.length() > 1000) reqBody = reqBody.substring(0, 1000) + "...";
+        }
 
         String respBody = responseBody;
         if (respBody.length() > 1000) respBody = respBody.substring(0, 1000) + "...";
 
         String errMsg = "";
         if (statusCode >= 400) errMsg = respBody;
-
-        String path = request.uri();
-        int queryIdx = path.indexOf('?');
-        if (queryIdx >= 0) path = path.substring(0, queryIdx);
 
         metaStore.saveApiCallLog(user.getUserName(), path, request.method().name(),
                 reqBody, respBody, statusCode, errMsg);

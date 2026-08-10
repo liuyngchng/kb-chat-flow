@@ -44,13 +44,13 @@ type MetaStore interface {
 	// 用户 (users)
 	// ============================================================
 
-	GetUserByLogin(userName, md5Pwd string) (*model.User, error)
+	GetUserByLogin(userName string) (*model.User, error)
 	GetUserByName(userName string) (*model.User, error)
 	ListUsers() ([]model.User, error)
-	CreateUser(userName, userPwd string, role int, note string) error
+	CreateUser(userName string, userPwdHash string, role int, note string) error
 	DeleteUserByName(userName string) error
-	ResetPassword(userName, md5Pwd string) error
-	UpdatePassword(userName, oldMd5Pwd, newMd5Pwd string) error
+	ResetPassword(userName string, userPwdHash string) error
+	UpdatePassword(userName string, newPwdHash string) error
 
 	// ============================================================
 	// API Token

@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -36,6 +37,16 @@ public class HttpServer {
 
     // ThreadLocal for path parameters per request
     private static final ThreadLocal<Map<String, String>> PATH_PARAMS = ThreadLocal.withInitial(ConcurrentHashMap::new);
+
+    // Security response headers
+    private static final Map<String, String> SECURITY_HEADERS = Map.of(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains",
+            "X-Content-Type-Options", "nosniff",
+            "X-Frame-Options", "DENY",
+            "X-XSS-Protection", "0",
+            "Referrer-Policy", "strict-origin-when-cross-origin",
+            "Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
+    );
 
     public HttpServer(int port, Router router, Config config) {
         this.port = port;
@@ -251,6 +262,7 @@ public class HttpServer {
         response.headers()
                 .set(HttpHeaderNames.CONTENT_TYPE, "application/json; charset=utf-8")
                 .set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        applySecurityHeaders(response);
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
     }
 
@@ -261,7 +273,14 @@ public class HttpServer {
         response.headers()
                 .set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=utf-8")
                 .set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
+        applySecurityHeaders(response);
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private static void applySecurityHeaders(FullHttpResponse response) {
+        for (var entry : SECURITY_HEADERS.entrySet()) {
+            response.headers().set(entry.getKey(), entry.getValue());
+        }
     }
 
     public static void sendFile(ChannelHandlerContext ctx, String filePath, String fileName) {

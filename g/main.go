@@ -46,6 +46,18 @@ func main() {
 
 	slog.Info("启动对话机器人...", "mode", cfg.Server.Mode, "role", cfg.Server.Role)
 
+	// Token 签名密钥校验
+	if cfg.Server.Mode == model.ModeCluster && cfg.Server.TokenSecret == "" {
+		fmt.Fprintf(os.Stderr, "错误: cluster 模式下必须配置 server.token_secret（多节点共享 HMAC 签名密钥）\n")
+		fmt.Fprintf(os.Stderr, "请在 cfg.yml 的 server 段中添加 token_secret 字段，例如:\n")
+		fmt.Fprintf(os.Stderr, "  server:\n")
+		fmt.Fprintf(os.Stderr, "    token_secret: \"请使用 openssl rand -hex 32 生成随机密钥\"\n")
+		os.Exit(1)
+	}
+	if cfg.Server.TokenSecret == "" {
+		slog.Warn("未配置 server.token_secret，使用默认密钥。生产环境请务必设置自定义密钥！")
+	}
+
 	// 初始化元数据存储（根据 store.backend 配置选择后端）
 	var metaStore store.MetaStore
 	switch cfg.Store.Backend {
@@ -172,6 +184,7 @@ func main() {
 	}
 	r := gin.New()
 	r.Use(logger.GinLogger(), gin.Recovery())
+	r.Use(handler.SecurityHeaders())
 
 	// API 调用日志中间件（记录携带 Authorization 头的请求）
 	r.Use(handler.ApiCallLogMiddleware(metaStore))

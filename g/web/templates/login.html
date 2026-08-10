@@ -35,8 +35,10 @@
             </form>
 
             <div class="login-footer">
+                {{if .debug}}
                 <p>内置账号: user0 / user1 / admin / person0 / person1</p>
                 <p>密码与用户名相同</p>
+                {{end}}
             </div>
         </div>
     </div>
@@ -63,8 +65,7 @@
                 });
                 const data = await resp.json();
                 if (data.status === 'ok') {
-                    localStorage.setItem('token', data.token);
-                    window.location.href = '/?t=' + encodeURIComponent(data.token);
+                    window.location.href = '/';
                 } else {
                     errorMsg.textContent = data.error || '登录失败';
                     errorDiv.style.display = 'flex';

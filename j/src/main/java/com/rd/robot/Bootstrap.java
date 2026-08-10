@@ -40,7 +40,19 @@ public class Bootstrap {
 
         log.info("启动对话机器人... mode={} role={}", cfg.getServer().getMode(), cfg.getServer().getRole());
 
-        // 2. Init token secret (cluster mode needs consistent secret across nodes)
+        // 2. Token 签名密钥校验
+        if (cfg.getServer().isClusterMode() && (cfg.getServer().getTokenSecret() == null || cfg.getServer().getTokenSecret().isEmpty())) {
+            System.err.println("错误: cluster 模式下必须配置 server.token_secret（多节点共享 HMAC 签名密钥）");
+            System.err.println("请在 cfg.yml 的 server 段中添加 token_secret 字段，例如:");
+            System.err.println("  server:");
+            System.err.println("    token_secret: \"请使用 openssl rand -hex 32 生成随机密钥\"");
+            System.exit(1);
+        }
+        if (cfg.getServer().getTokenSecret() == null || cfg.getServer().getTokenSecret().isEmpty()) {
+            log.warn("未配置 server.token_secret，使用默认密钥。生产环境请务必设置自定义密钥！");
+        }
+
+        // 3. Init token secret (cluster mode needs consistent secret across nodes)
         if (cfg.getServer().getTokenSecret() != null && !cfg.getServer().getTokenSecret().isEmpty()) {
             TokenProvider.initSecret(cfg.getServer().getTokenSecret());
         }

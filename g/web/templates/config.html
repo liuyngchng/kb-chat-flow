@@ -513,12 +513,12 @@
                     <div class="cfg-iframe-wrap">
                         <div class="cfg-iframe-header">
                             <i class="fas fa-database"></i> 知识库
-                            <a href="/vdb/idx?t={{.token}}" target="_blank">
+                            <a href="/vdb/idx" target="_blank">
                                 <i class="fas fa-external-link-alt"></i> 新窗口打开
                             </a>
                         </div>
                         <iframe class="cfg-iframe" id="kbmgmtIframe"
-                                src="/vdb/idx?t={{.token}}">
+                                src="/vdb/idx">
                         </iframe>
                     </div>
                 </div>
@@ -528,12 +528,12 @@
                     <div class="cfg-iframe-wrap">
                         <div class="cfg-iframe-header">
                             <i class="fas fa-link"></i> 业务知识库绑定
-                            <a href="/admin/vdb/bind?t={{.token}}" target="_blank">
+                            <a href="/admin/vdb/bind" target="_blank">
                                 <i class="fas fa-external-link-alt"></i> 新窗口打开
                             </a>
                         </div>
                         <iframe class="cfg-iframe" id="vdbBindIframe"
-                                src="/admin/vdb/bind?t={{.token}}">
+                                src="/admin/vdb/bind">
                         </iframe>
                     </div>
                 </div>
@@ -1095,30 +1095,17 @@
     <script>
         // 退出登录
         function logout() {
-            localStorage.removeItem('token');
-            window.location.href = '/login';
+            fetch('/api/logout', { method: 'POST' }).finally(function() {
+                window.location.href = '/login';
+            });
         }
-
-        // 从 URL 参数 t 提取 token 并持久化
-        (function() {
-            var params = new URLSearchParams(window.location.search);
-            var t = params.get('t');
-            if (t) {
-                localStorage.setItem('token', t);
-            }
-        })();
 
         // Go template escapes: define brace variables for JavaScript template strings
         var T_OPEN = '\x7B\x7B';
         var T_CLOSE = '\x7D\x7D';
 
-        function getToken() {
-            return localStorage.getItem('token') || '';
-        }
+        // 浏览器请求通过 httpOnly Cookie 自动携带 token，无需手动管理
         function authFetch(url, options) {
-            options = options || {};
-            options.headers = options.headers || {};
-            options.headers['Authorization'] = 'Bearer ' + getToken();
             return fetch(url, options);
         }
 

@@ -64,8 +64,17 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	md5Pwd := md5Hash(req.UserPwd)
-	if err := h.store.CreateUser(req.UserName, md5Pwd, req.Role, req.Note); err != nil {
+	if err := store.ValidatePassword(req.UserPwd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	pwdHash, err := store.HashPassword(req.UserPwd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "密码哈希失败"})
+		return
+	}
+	if err := h.store.CreateUser(req.UserName, pwdHash, req.Role, req.Note); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "创建用户失败: " + err.Error()})
 		return
 	}
@@ -109,8 +118,17 @@ func (h *UserHandler) ResetUserPwd(c *gin.Context) {
 		return
 	}
 
-	md5Pwd := md5Hash(req.UserPwd)
-	if err := h.store.ResetPassword(userName, md5Pwd); err != nil {
+	if err := store.ValidatePassword(req.UserPwd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	pwdHash, err := store.HashPassword(req.UserPwd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "密码哈希失败"})
+		return
+	}
+	if err := h.store.ResetPassword(userName, pwdHash); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "重置密码失败: " + err.Error()})
 		return
 	}
@@ -137,10 +155,29 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 		return
 	}
 
-	oldMd5 := md5Hash(req.OldPwd)
-	newMd5 := md5Hash(req.NewPwd)
+	if err := store.ValidatePassword(req.NewPwd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
-	if err := h.store.UpdatePassword(userName, oldMd5, newMd5); err != nil {
+	// 先从数据库取得当前用户，验证旧密码
+	user, err := h.store.GetUserByName(userName)
+	if err != nil || user == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户信息失败"})
+		return
+	}
+	if !store.VerifyPassword(req.OldPwd, user.UserPwd) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "旧密码不正确"})
+		return
+	}
+
+	newPwdHash, err := store.HashPassword(req.NewPwd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "密码哈希失败"})
+		return
+	}
+
+	if err := h.store.UpdatePassword(userName, newPwdHash); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "修改密码失败: " + err.Error()})
 		return
 	}
@@ -241,6 +278,13 @@ func (h *UserHandler) MyCallLogs(c *gin.Context) {
 
 // ApiCallLogMiddleware 记录 API 调用的中间件
 func ApiCallLogMiddleware(store store.MetaStore) gin.HandlerFunc {
+	// 敏感路径：请求体不应记录到日志
+	sensitivePaths := map[string]bool{
+		"/api/login":         true,
+		"/api/user/password": true,
+		"/api/users":         true, // 创建/重置密码也在此路径
+	}
+
 	return func(c *gin.Context) {
 		// 仅记录携带 API token 的请求
 		auth := c.GetHeader("Authorization")
@@ -268,8 +312,10 @@ func ApiCallLogMiddleware(store store.MetaStore) gin.HandlerFunc {
 			// 恢复 body 供后续 handler 读取
 			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		}
-		// 截断过长的请求体
-		if len(reqBody) > 1000 {
+		// 敏感路径不记录请求体
+		if sensitivePaths[c.Request.URL.Path] {
+			reqBody = "[敏感数据已脱敏]"
+		} else if len(reqBody) > 1000 {
 			reqBody = reqBody[:1000] + "..."
 		}
 

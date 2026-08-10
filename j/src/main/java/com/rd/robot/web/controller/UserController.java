@@ -3,6 +3,7 @@ package com.rd.robot.web.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rd.robot.model.*;
 import com.rd.robot.repository.MetaStore;
+import com.rd.robot.security.PasswordEncoder;
 import com.rd.robot.security.TokenProvider;
 import com.rd.robot.web.server.HttpServer;
 import io.netty.channel.ChannelHandlerContext;
@@ -59,9 +60,16 @@ public class UserController {
             String body = req.content().toString(CharsetUtil.UTF_8);
             CreateUserRequest createReq = MAPPER.readValue(body, CreateUserRequest.class);
 
-            String md5Pwd = TokenProvider.md5Hash(createReq.getUserPwd());
-            metaStore.createUser(createReq.getUserName(), md5Pwd, createReq.getRole(), createReq.getNote());
+            // Validate password
+            PasswordEncoder.validatePassword(createReq.getUserPwd());
+
+            // Hash password with bcrypt
+            String pwdHash = PasswordEncoder.hashPassword(createReq.getUserPwd());
+
+            metaStore.createUser(createReq.getUserName(), pwdHash, createReq.getRole(), createReq.getNote());
             HttpServer.sendJson(ctx, 200, "{\"status\":\"ok\"}");
+        } catch (IllegalArgumentException e) {
+            HttpServer.sendJson(ctx, 400, "{\"error\":\"" + e.getMessage() + "\"}");
         } catch (Exception e) {
             HttpServer.sendJson(ctx, 500, "{\"error\":\"创建用户失败: " + e.getMessage() + "\"}");
         }
@@ -95,9 +103,16 @@ public class UserController {
             String body = req.content().toString(CharsetUtil.UTF_8);
             ResetPwdRequest pwdReq = MAPPER.readValue(body, ResetPwdRequest.class);
 
-            String md5Pwd = TokenProvider.md5Hash(pwdReq.getUserPwd());
-            metaStore.resetPassword(userName, md5Pwd);
+            // Validate password
+            PasswordEncoder.validatePassword(pwdReq.getUserPwd());
+
+            // Hash password with bcrypt
+            String pwdHash = PasswordEncoder.hashPassword(pwdReq.getUserPwd());
+
+            metaStore.resetPassword(userName, pwdHash);
             HttpServer.sendJson(ctx, 200, "{\"status\":\"ok\"}");
+        } catch (IllegalArgumentException e) {
+            HttpServer.sendJson(ctx, 400, "{\"error\":\"" + e.getMessage() + "\"}");
         } catch (Exception e) {
             HttpServer.sendJson(ctx, 500, "{\"error\":\"重置密码失败: " + e.getMessage() + "\"}");
         }
@@ -123,11 +138,29 @@ public class UserController {
                 return;
             }
 
-            String oldMd5 = TokenProvider.md5Hash(pwdReq.getOldPwd());
-            String newMd5 = TokenProvider.md5Hash(pwdReq.getNewPwd());
+            // Validate new password
+            PasswordEncoder.validatePassword(pwdReq.getNewPwd());
 
-            metaStore.updatePassword(user.getUserName(), oldMd5, newMd5);
+            // Fetch current user to verify old password
+            User dbUser = metaStore.getUserByName(user.getUserName());
+            if (dbUser == null) {
+                HttpServer.sendJson(ctx, 500, "{\"error\":\"获取用户信息失败\"}");
+                return;
+            }
+
+            // Verify old password with bcrypt
+            if (!PasswordEncoder.verifyPassword(pwdReq.getOldPwd(), dbUser.getUserPwd())) {
+                HttpServer.sendJson(ctx, 400, "{\"error\":\"旧密码不正确\"}");
+                return;
+            }
+
+            // Hash new password
+            String newPwdHash = PasswordEncoder.hashPassword(pwdReq.getNewPwd());
+
+            metaStore.updatePassword(user.getUserName(), newPwdHash);
             HttpServer.sendJson(ctx, 200, "{\"status\":\"ok\"}");
+        } catch (IllegalArgumentException e) {
+            HttpServer.sendJson(ctx, 400, "{\"error\":\"" + e.getMessage() + "\"}");
         } catch (Exception e) {
             HttpServer.sendJson(ctx, 400, "{\"error\":\"修改密码失败: " + e.getMessage() + "\"}");
         }

@@ -4,6 +4,7 @@ import com.alibaba.druid.pool.DruidDataSource;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rd.robot.model.*;
+import com.rd.robot.security.PasswordEncoder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,7 +96,7 @@ public class MysqlMetaStore implements MetaStore {
             CREATE TABLE IF NOT EXISTS users (
                 uid BIGINT AUTO_INCREMENT PRIMARY KEY,
                 user_name VARCHAR(255) NOT NULL UNIQUE,
-                user_pwd VARCHAR(64) NOT NULL DEFAULT '',
+                user_pwd VARCHAR(255) NOT NULL DEFAULT '',
                 role INT NOT NULL DEFAULT 0,
                 note VARCHAR(512) NOT NULL DEFAULT '',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -194,7 +195,7 @@ public class MysqlMetaStore implements MetaStore {
             for (var u : BUILTIN_USERS) {
                 try (PreparedStatement ps = conn.prepareStatement(sql)) {
                     ps.setString(1, u.userName);
-                    ps.setString(2, md5Hash(u.userName));
+                    ps.setString(2, PasswordEncoder.hashPassword(u.userName));
                     ps.setInt(3, u.role);
                     ps.setString(4, u.note);
                     ps.executeUpdate();
@@ -470,12 +471,11 @@ public class MysqlMetaStore implements MetaStore {
     }
 
     @Override
-    public User getUserByLogin(String userName, String md5Pwd) {
-        String sql = "SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ? AND user_pwd = ?";
+    public User getUserByLogin(String userName) {
+        String sql = "SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ?";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, userName);
-            ps.setString(2, md5Pwd);
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? mapUser(rs) : null;
             }
@@ -524,14 +524,13 @@ public class MysqlMetaStore implements MetaStore {
     }
 
     @Override
-    public void resetPassword(String userName, String md5Pwd) {
-        execUpdate("UPDATE users SET user_pwd = ? WHERE user_name = ?", md5Pwd, userName);
+    public void resetPassword(String userName, String pwdHash) {
+        execUpdate("UPDATE users SET user_pwd = ? WHERE user_name = ?", pwdHash, userName);
     }
 
     @Override
-    public void updatePassword(String userName, String oldMd5Pwd, String newMd5Pwd) {
-        int rows = execUpdate("UPDATE users SET user_pwd = ? WHERE user_name = ? AND user_pwd = ?", newMd5Pwd, userName, oldMd5Pwd);
-        if (rows == 0) throw new RuntimeException("旧密码不正确");
+    public void updatePassword(String userName, String newPwdHash) {
+        execUpdate("UPDATE users SET user_pwd = ? WHERE user_name = ?", newPwdHash, userName);
     }
 
     @Override
@@ -1021,18 +1020,6 @@ public class MysqlMetaStore implements MetaStore {
     // ============================================================
     // Helpers
     // ============================================================
-
-    private static String md5Hash(String s) {
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
-            byte[] digest = md.digest(s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder();
-            for (byte b : digest) sb.append(String.format("%02x", b));
-            return sb.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("MD5 计算失败", e);
-        }
-    }
 
     private int execUpdate(String sql, Object... args) {
         try (Connection conn = ds.getConnection();

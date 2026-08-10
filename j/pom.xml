@@ -118,6 +118,13 @@
             <artifactId>minio</artifactId>
             <version>8.5.17</version>
         </dependency>
+
+        <!-- jBCrypt — bcrypt 密码哈希 -->
+        <dependency>
+            <groupId>org.mindrot</groupId>
+            <artifactId>jbcrypt</artifactId>
+            <version>0.4</version>
+        </dependency>
     </dependencies>
 
     <build>

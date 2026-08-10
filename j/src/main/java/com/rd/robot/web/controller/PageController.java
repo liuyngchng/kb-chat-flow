@@ -141,7 +141,8 @@ public class PageController {
                     .replace("{{page_title}}", pageTitle())
                     .replace("{{default_user}}", "user0")
                     .replace("{{default_pwd}}", "user0")
-                    .replace("{{error_msg}}", "");
+                    .replace("{{error_msg}}", "")
+                    .replace("{{debug}}", String.valueOf(cfg.getServer().isDebug()));
             HttpServer.sendHtml(ctx, html);
         } catch (Exception e) {
             HttpServer.sendError(ctx, io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR, "页面加载失败");
@@ -168,13 +169,14 @@ public class PageController {
     }
 
     private String getToken(FullHttpRequest request) {
-        String token = HttpServer.getQueryParam(request, "t");
-        if (token != null) return token;
-        String auth = request.headers().get("Authorization");
-        if (auth != null && auth.startsWith("Bearer ")) {
-            return auth.substring(7);
-        }
-        return null;
+        // Cookie first (browser users)
+        String cookie = request.headers().get("Cookie");
+        String token = TokenProvider.extractToken(
+                request.headers().get("Authorization"),
+                cookie,
+                HttpServer.getQueryParam(request, "t")
+        );
+        return token;
     }
 
     private int getUserRole(FullHttpRequest request) {

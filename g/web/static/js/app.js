@@ -5,16 +5,9 @@ const queryInput = document.getElementById('query-input');
 const sendButton = document.getElementById('send-button');
 const stopButton = document.getElementById('stop-button');
 
-// 获取 token
-function getToken() {
-    return localStorage.getItem('token') || '';
-}
-
-// 带认证头的 fetch 封装
+// 浏览器请求通过 httpOnly Cookie 自动携带 token，无需手动管理
+// 第三方 API 调用仍通过 Authorization: Bearer header 携带 token
 function authFetch(url, options) {
-    options = options || {};
-    options.headers = options.headers || {};
-    options.headers['Authorization'] = 'Bearer ' + getToken();
     return fetch(url, options);
 }
 

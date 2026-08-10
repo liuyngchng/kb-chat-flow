@@ -13,6 +13,11 @@ server:
   #   admin — 仅管理面：系统管理 UI + 管理写 API + 文件处理 Worker，部署 1 台
   #   chat  — 仅用户聊天面：/api/chat 等用户接口，部署 N 台挂负载均衡
   role: "all"
+  # HMAC 签名密钥（用于生成和验证登录 token）:
+  #   - 单例模式：留空使用默认密钥（生产环境建议设置）
+  #   - 集群模式：必须设置，所有节点必须使用相同的密钥
+  #   - 生成方式：openssl rand -hex 32
+  # token_secret: ""
 
 sys:
   name: 对话机器人

@@ -1,15 +1,7 @@
 // 知识库管理页 JS
 
-// 获取 token
-function getToken() {
-    return localStorage.getItem('token') || '';
-}
-
-// 带认证头的 fetch 封装
+// 浏览器请求通过 httpOnly Cookie 自动携带 token，无需手动管理
 function authFetch(url, options) {
-    options = options || {};
-    options.headers = options.headers || {};
-    options.headers['Authorization'] = 'Bearer ' + getToken();
     return fetch(url, options);
 }
 

@@ -2,14 +2,15 @@ package handler
 
 import (
 	"crypto/hmac"
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"kb-chat-flow/internal/model"
@@ -24,6 +25,22 @@ var defaultTokenSecret = []byte("kb-chat-flow_secret_2026")
 // token 有效期 2 小时
 const tokenTTL = 2 * time.Hour
 
+// 登录限流配置
+const (
+	loginMaxFailures    = 5              // IP 最多连续失败次数
+	loginLockDuration   = 15 * time.Minute // 锁定时长
+	loginFailuresCleanup = 15 * time.Minute // 过期失败纪录清理间隔
+)
+
+// Cookie 名称
+const cookieAuthToken = "auth_token"
+
+// loginFailRecord 登录失败记录
+type loginFailRecord struct {
+	count     int
+	lockedUntil time.Time
+}
+
 // getTokenSecret 获取当前 token 签名密钥
 func (h *AuthHandler) getTokenSecret() []byte {
 	if h.cfg.Server.TokenSecret != "" {
@@ -34,9 +51,12 @@ func (h *AuthHandler) getTokenSecret() []byte {
 
 // AuthHandler 认证处理器
 type AuthHandler struct {
-	cfg      *model.Config
-	store    store.MetaStore
-	presence PresenceStore
+	cfg            *model.Config
+	store          store.MetaStore
+	presence       PresenceStore
+	tokenBlacklist sync.Map // key: tokenSignature (string), value: expiry (time.Time)
+	loginFailures  sync.Map // key: clientIP (string), value: *loginFailRecord
+	startCleanup   sync.Once
 }
 
 // NewAuthHandler 创建认证处理器
@@ -46,6 +66,33 @@ func NewAuthHandler(cfg *model.Config, metaStore store.MetaStore, presence Prese
 		store:    metaStore,
 		presence: presence,
 	}
+}
+
+// startBlacklistCleanup 启动后台清理过期黑名单条目和登录失败记录的 goroutine
+func (h *AuthHandler) startBlacklistCleanup() {
+	h.startCleanup.Do(func() {
+		go func() {
+			ticker := time.NewTicker(10 * time.Minute)
+			defer ticker.Stop()
+			for range ticker.C {
+				now := time.Now()
+				h.tokenBlacklist.Range(func(key, value interface{}) bool {
+					expiry, ok := value.(time.Time)
+					if ok && now.After(expiry) {
+						h.tokenBlacklist.Delete(key)
+					}
+					return true
+				})
+				h.loginFailures.Range(func(key, value interface{}) bool {
+					rec, ok := value.(*loginFailRecord)
+					if ok && now.After(rec.lockedUntil) && rec.count >= loginMaxFailures {
+						h.loginFailures.Delete(key)
+					}
+					return true
+				})
+			}
+		}()
+	})
 }
 
 // OnlineAgent 在线座席信息
@@ -67,6 +114,7 @@ func (h *AuthHandler) LoginPage(c *gin.Context) {
 		"default_user": "user0",
 		"default_pwd":  "user0",
 		"error_msg":    "",
+		"debug":        h.cfg.Server.Debug,
 	})
 }
 
@@ -79,7 +127,7 @@ func generateToken(userName string, role int, expiry time.Time, secret []byte) s
 	// HMAC-SHA256 签名
 	mac := hmac.New(sha256.New, secret)
 	mac.Write([]byte(payload))
-	sig := hex.EncodeToString(mac.Sum(nil))[:16] // 取前 16 位
+	sig := hex.EncodeToString(mac.Sum(nil))
 
 	full := fmt.Sprintf("%s|%s", payload, sig)
 	return base64.RawURLEncoding.EncodeToString([]byte(full))
@@ -103,6 +151,11 @@ func (h *AuthHandler) parseToken(tokenStr string) *model.User {
 	expiryUnix := parts[2]
 	sig := parts[3]
 
+	// 检查 token 是否在黑名单中（已注销）
+	if _, blacklisted := h.tokenBlacklist.Load(sig); blacklisted {
+		return nil
+	}
+
 	// 检查过期
 	expiry, err := strconv.ParseInt(expiryUnix, 10, 64)
 	if err != nil || time.Now().Unix() > expiry {
@@ -113,7 +166,7 @@ func (h *AuthHandler) parseToken(tokenStr string) *model.User {
 	payload := fmt.Sprintf("%s|%d|%s", userName, role, expiryUnix)
 	mac := hmac.New(sha256.New, h.getTokenSecret())
 	mac.Write([]byte(payload))
-	expectedSig := hex.EncodeToString(mac.Sum(nil))[:16]
+	expectedSig := hex.EncodeToString(mac.Sum(nil))
 
 	if !hmac.Equal([]byte(sig), []byte(expectedSig)) {
 		return nil
@@ -127,6 +180,8 @@ func (h *AuthHandler) parseToken(tokenStr string) *model.User {
 
 // Login 处理登录请求（JSON）
 func (h *AuthHandler) Login(c *gin.Context) {
+	clientIP := clientIP(c)
+
 	var req model.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误: " + err.Error()})
@@ -138,19 +193,29 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// MD5 密码
-	md5Pwd := md5Hash(req.UserPwd)
+	// 登录限流：检查是否被锁定
+	h.startBlacklistCleanup()
+	if locked := h.isLoginLocked(clientIP); locked {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "登录失败次数过多，请稍后再试"})
+		return
+	}
 
-	user, err := h.store.GetUserByLogin(req.UserName, md5Pwd)
+	// 按用户名查询用户
+	user, err := h.store.GetUserByLogin(req.UserName)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "登录失败: " + err.Error()})
 		return
 	}
 
-	if user == nil {
+	// 使用 bcrypt 验证密码
+	if user == nil || !store.VerifyPassword(req.UserPwd, user.UserPwd) {
+		h.recordLoginFailure(clientIP)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
 		return
 	}
+
+	// 登录成功，清除失败记录
+	h.clearLoginFailures(clientIP)
 
 	// admin 实例：仅管理员可登录
 	if h.cfg.Server.Role == model.SvcRoleAdmin && user.Role != model.RoleAdmin {
@@ -160,6 +225,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	expiry := time.Now().Add(tokenTTL)
 	token := generateToken(user.UserName, user.Role, expiry, h.getTokenSecret())
+
+	// 设置 httpOnly + Secure + SameSite=Strict Cookie
+	setAuthCookie(c, token, int(tokenTTL.Seconds()))
 
 	// 如果是客服座席，加入在线列表
 	if user.Role == model.RoleAgent {
@@ -176,23 +244,71 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 // Logout 处理注销
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// 从 token 中解析用户
+	// 解析 token 获取用户信息，然后加入黑名单
 	if tokenStr := extractToken(c); tokenStr != "" {
-		if user := h.parseToken(tokenStr); user != nil {
+		// 先解析 token 获取用户（此时还未加入黑名单）
+		user := h.parseToken(tokenStr)
+		if user != nil {
 			h.presence.RemovePresence(user.UserName)
 		}
+
+		// 将 token 签名加入黑名单，使其立即失效
+		data, err := base64.RawURLEncoding.DecodeString(tokenStr)
+		if err == nil {
+			parts := strings.SplitN(string(data), "|", 4)
+			if len(parts) == 4 {
+				expiryUnix, _ := strconv.ParseInt(parts[2], 10, 64)
+				expiry := time.Unix(expiryUnix, 0)
+				h.tokenBlacklist.Store(parts[3], expiry)
+				h.startBlacklistCleanup()
+			}
+		}
 	}
+
+	// 清除 Cookie
+	clearAuthCookie(c)
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-// extractToken 从 URL 参数 t 或 Authorization 头提取 token
+// setAuthCookie 设置 httpOnly + Secure(仅HTTPS) + SameSite=Strict 的认证 Cookie
+func setAuthCookie(c *gin.Context, token string, maxAge int) {
+	// 判断请求是否经过 HTTPS（直连 TLS 或通过 nginx 反代）
+	secure := c.Request.TLS != nil ||
+		c.GetHeader("X-Forwarded-Proto") == "https" ||
+		c.GetHeader("X-Forwarded-Scheme") == "https"
+
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     cookieAuthToken,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// clearAuthCookie 清除认证 Cookie
+func clearAuthCookie(c *gin.Context) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     cookieAuthToken,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+// 浏览器用户：httpOnly Cookie 自动携带
+// API 用户：Authorization: Bearer xxx
 func extractToken(c *gin.Context) string {
-	// 优先从 URL 参数 t 读取
-	if t := c.Query("t"); t != "" {
-		return t
+	// 优先从 Cookie 读取（浏览器用户）
+	if token, err := c.Cookie(cookieAuthToken); err == nil && token != "" {
+		return token
 	}
-	// 其次从 Authorization 头读取
+	// 其次从 Authorization 头读取（API 用户 / 第三方调用）
 	auth := c.GetHeader("Authorization")
 	if strings.HasPrefix(auth, "Bearer ") {
 		return strings.TrimPrefix(auth, "Bearer ")
@@ -289,7 +405,7 @@ func (h *AuthHandler) GetOnlineAgents(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"agents": agents})
 }
 
-// Me 返回当前登录用户信息（从 Authorization header 或 URL t 参数解析 token）
+// Me 返回当前登录用户信息（从 Cookie 或 Authorization header 解析 token）
 func (h *AuthHandler) Me(c *gin.Context) {
 	tokenStr := extractToken(c)
 	if tokenStr == "" {
@@ -309,8 +425,51 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	})
 }
 
-// md5Hash 计算字符串的 MD5
-func md5Hash(s string) string {
-	h := md5.Sum([]byte(s))
-	return hex.EncodeToString(h[:])
+// ============================================================
+// 登录限流（IP 级别）
+// ============================================================
+
+// clientIP 从请求中提取客户端 IP
+func clientIP(c *gin.Context) string {
+	// 优先 X-Forwarded-For（nginx 反代时设置）
+	if fwd := c.GetHeader("X-Forwarded-For"); fwd != "" {
+		ip := strings.SplitN(fwd, ",", 2)[0]
+		return strings.TrimSpace(ip)
+	}
+	// 其次 X-Real-IP
+	if realIP := c.GetHeader("X-Real-IP"); realIP != "" {
+		return strings.TrimSpace(realIP)
+	}
+	// 回退到直连 IP
+	host, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
+	return host
+}
+
+// isLoginLocked 检查 IP 是否被锁定
+func (h *AuthHandler) isLoginLocked(ip string) bool {
+	val, ok := h.loginFailures.Load(ip)
+	if !ok {
+		return false
+	}
+	rec := val.(*loginFailRecord)
+	if rec.count >= loginMaxFailures && time.Now().Before(rec.lockedUntil) {
+		return true
+	}
+	return false
+}
+
+// recordLoginFailure 记录一次登录失败
+func (h *AuthHandler) recordLoginFailure(ip string) {
+	now := time.Now()
+	val, _ := h.loginFailures.LoadOrStore(ip, &loginFailRecord{})
+	rec := val.(*loginFailRecord)
+	rec.count++
+	if rec.count >= loginMaxFailures {
+		rec.lockedUntil = now.Add(loginLockDuration)
+	}
+}
+
+// clearLoginFailures 清除 IP 的登录失败记录
+func (h *AuthHandler) clearLoginFailures(ip string) {
+	h.loginFailures.Delete(ip)
 }
