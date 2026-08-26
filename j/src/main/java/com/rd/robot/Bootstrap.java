@@ -134,6 +134,7 @@ public class Bootstrap {
 
         // -- Pages --
         router.addRoute("GET", "/login", pageController::loginPage);
+        router.addRoute("GET", "/register", pageController::registerPage);
 
         // Chat pages (only chat role)
         if (isChat) {
@@ -153,6 +154,7 @@ public class Bootstrap {
         // -- Auth API (JSON) --
         router.addRoute("POST", "/api/login", authController::login);
         router.addRoute("POST", "/api/logout", authController::logout);
+        router.addRoute("POST", "/api/register", userController::register);
         router.addRoute("GET", "/api/me", authController::me);
         router.addRoute("GET", "/api/agents", authController::getOnlineAgents);
 

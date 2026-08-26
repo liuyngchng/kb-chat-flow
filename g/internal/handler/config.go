@@ -150,17 +150,17 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 			return
 		}
 	}
-		// 工作模式（始终保存）
-		if err := h.store.SetConfig("sys.work_mode", fmt.Sprintf("%d", req.Sys.WorkMode), "工作模式: 0=KB, 1=CSM, 2=动态工作流"); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存工作模式失败: " + err.Error()})
-			return
-		}
-		// 动态工作流 ID
-		if err := h.store.SetConfig("sys.default_workflow_id", fmt.Sprintf("%d", req.Sys.DefaultWorkflowID), "动态工作流 ID"); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存默认工作流失败: " + err.Error()})
-			return
-		}
-		// sys.auth 只从 cfg.yml 读取，不允许在页面上修改
+	// 工作模式（始终保存）
+	if err := h.store.SetConfig("sys.work_mode", fmt.Sprintf("%d", req.Sys.WorkMode), "工作模式: 0=KB, 1=CSM, 2=动态工作流"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存工作模式失败: " + err.Error()})
+		return
+	}
+	// 动态工作流 ID
+	if err := h.store.SetConfig("sys.default_workflow_id", fmt.Sprintf("%d", req.Sys.DefaultWorkflowID), "动态工作流 ID"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存默认工作流失败: " + err.Error()})
+		return
+	}
+	// sys.auth 只从 cfg.yml 读取，不允许在页面上修改
 	if req.Sys.ApiAuth != "" {
 		if err := h.store.SetConfig("sys.api_auth", req.Sys.ApiAuth, "是否启用接口认证"); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存接口认证配置失败: " + err.Error()})
@@ -388,12 +388,12 @@ func (h *ConfigHandler) Info(c *gin.Context) {
 	supportedFileTypes := []string{"txt", "md", "pdf", "docx", "xlsx"}
 
 	c.JSON(http.StatusOK, gin.H{
-		"name":                h.cfg.Sys.Name,
-		"version":             "1.0.0",
-		"work_mode":           h.cfg.Sys.WorkMode,
-		"vector_backend":      h.cfg.Vector.Backend,
-		"store_backend":       h.cfg.Store.Backend,
+		"name":                 h.cfg.Sys.Name,
+		"version":              "1.0.0",
+		"work_mode":            h.cfg.Sys.WorkMode,
+		"vector_backend":       h.cfg.Vector.Backend,
+		"store_backend":        h.cfg.Store.Backend,
 		"supported_file_types": supportedFileTypes,
-		"api_auth_enabled":    h.cfg.Sys.ApiAuth,
+		"api_auth_enabled":     h.cfg.Sys.ApiAuth,
 	})
 }

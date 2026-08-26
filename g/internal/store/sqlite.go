@@ -1,9 +1,12 @@
 package store
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"math/big"
 	"os"
 	"time"
 
@@ -104,6 +107,7 @@ func (s *SQLiteStore) migrate() error {
 			user_pwd TEXT NOT NULL DEFAULT '',
 			role INTEGER NOT NULL DEFAULT 0,
 			note TEXT NOT NULL DEFAULT '',
+			pwd_expires_at TEXT NOT NULL DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
@@ -468,39 +472,42 @@ func (s *SQLiteStore) UpsertPrompt(name, value string, uid int) error {
 // GetUserByLogin 按用户名查询用户（密码验证由 handler 层用 bcrypt 完成）
 func (s *SQLiteStore) GetUserByLogin(userName string) (*model.User, error) {
 	row := s.db.QueryRow(
-		"SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ?",
+		"SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users WHERE user_name = ?",
 		userName,
 	)
-	var u model.User
-	err := row.Scan(&u.UID, &u.UserName, &u.UserPwd, &u.Role, &u.Note)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &u, nil
+	return scanUser(row)
 }
 
 // GetUserByName 按用户名查询用户
 func (s *SQLiteStore) GetUserByName(userName string) (*model.User, error) {
 	row := s.db.QueryRow(
-		"SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ?",
+		"SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users WHERE user_name = ?",
 		userName,
 	)
+	return scanUser(row)
+}
+
+// scanUser 扫描 users 行，解析 pwd_expires_at（空字符串 = 无过期限制）
+func scanUser(row *sql.Row) (*model.User, error) {
 	var u model.User
-	err := row.Scan(&u.UID, &u.UserName, &u.UserPwd, &u.Role, &u.Note)
+	var expiresAt string
+	err := row.Scan(&u.UID, &u.UserName, &u.UserPwd, &u.Role, &u.Note, &expiresAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	if expiresAt != "" {
+		if t, err := time.Parse(time.RFC3339, expiresAt); err == nil {
+			u.PwdExpiresAt = t
+		}
+	}
 	return &u, nil
 }
 
 // seedUsers 种子内置用户（仅当 users 表为空时）
-// 密码使用 bcrypt 哈希，密码与用户名相同
+// 首次运行创建 admin 账号：随机密码，1 小时有效期，登录后须强制改密码
 func (s *SQLiteStore) seedUsers() error {
 	var count int
 	err := s.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
@@ -511,32 +518,61 @@ func (s *SQLiteStore) seedUsers() error {
 		return nil
 	}
 
-	builtinUsers := []struct {
-		userName string
-		role     int
-		note     string
-	}{
-		{"user0", model.RoleNormal, "内置普通用户"},
-		{"user1", model.RoleNormal, "内置普通用户"},
-		{"admin", model.RoleAdmin, "内置管理员"},
-		{"person0", model.RoleAgent, "内置客服座席"},
-		{"person1", model.RoleAgent, "内置客服座席"},
-		{"api0", model.RoleAPI, "内置API调用用户"},
+	// 生成随机初始密码（12 位字母数字）
+	adminPwd, err := randomPassword(12)
+	if err != nil {
+		return fmt.Errorf("生成 admin 随机密码失败: %w", err)
 	}
 
-	for _, u := range builtinUsers {
-		pwdHash, err := hashPassword(u.userName) // 密码与用户名相同
-		if err != nil {
-			return fmt.Errorf("种子用户 %s 密码哈希失败: %w", u.userName, err)
-		}
-		if _, err := s.db.Exec(
-			"INSERT INTO users (user_name, user_pwd, role, note) VALUES (?, ?, ?, ?)",
-			u.userName, pwdHash, u.role, u.note,
-		); err != nil {
-			return fmt.Errorf("种子用户 %s 插入失败: %w", u.userName, err)
-		}
+	pwdHash, err := hashPassword(adminPwd)
+	if err != nil {
+		return fmt.Errorf("admin 密码哈希失败: %w", err)
 	}
+
+	// admin 密码 1 小时后过期，登录后强制修改
+	expiresAt := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
+	if _, err := s.db.Exec(
+		"INSERT INTO users (user_name, user_pwd, role, note, pwd_expires_at) VALUES (?, ?, ?, ?, ?)",
+		"admin", pwdHash, model.RoleAdmin, "内置管理员", expiresAt,
+	); err != nil {
+		return fmt.Errorf("种子用户 admin 插入失败: %w", err)
+	}
+
+	// 内置 API 调用用户
+	apiPwdHash, err := hashPassword("api0")
+	if err != nil {
+		return fmt.Errorf("api0 密码哈希失败: %w", err)
+	}
+	if _, err := s.db.Exec(
+		"INSERT INTO users (user_name, user_pwd, role, note) VALUES (?, ?, ?, ?)",
+		"api0", apiPwdHash, model.RoleAPI, "内置API调用用户",
+	); err != nil {
+		return fmt.Errorf("种子用户 api0 插入失败: %w", err)
+	}
+
+	// 随机密码打印到控制台和日志文件
+	slog.Info("首次运行已创建管理员账号", "user_name", "admin", "initial_password", adminPwd, "expires_in", "1h")
+	fmt.Printf("\n========================================\n")
+	fmt.Printf("  首次运行已创建管理员账号 admin\n")
+	fmt.Printf("  初始密码: %s\n", adminPwd)
+	fmt.Printf("  该密码 1 小时内有效，登录后需立即修改密码\n")
+	fmt.Printf("========================================\n\n")
+
 	return nil
+}
+
+// randomPassword 生成指定长度的随机字母数字密码（crypto/rand，密码学安全）
+func randomPassword(length int) (string, error) {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	result := make([]byte, length)
+	for i := range result {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "", err
+		}
+		result[i] = charset[n.Int64()]
+	}
+	return string(result), nil
 }
 
 // ============================================================
@@ -546,7 +582,7 @@ func (s *SQLiteStore) seedUsers() error {
 // ListUsers 获取所有用户列表
 func (s *SQLiteStore) ListUsers() ([]model.User, error) {
 	rows, err := s.db.Query(
-		"SELECT uid, user_name, user_pwd, role, note FROM users ORDER BY uid",
+		"SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users ORDER BY uid",
 	)
 	if err != nil {
 		return nil, err
@@ -556,8 +592,14 @@ func (s *SQLiteStore) ListUsers() ([]model.User, error) {
 	var users []model.User
 	for rows.Next() {
 		var u model.User
-		if err := rows.Scan(&u.UID, &u.UserName, &u.UserPwd, &u.Role, &u.Note); err != nil {
+		var expiresAt string
+		if err := rows.Scan(&u.UID, &u.UserName, &u.UserPwd, &u.Role, &u.Note, &expiresAt); err != nil {
 			return nil, err
+		}
+		if expiresAt != "" {
+			if t, err := time.Parse(time.RFC3339, expiresAt); err == nil {
+				u.PwdExpiresAt = t
+			}
 		}
 		users = append(users, u)
 	}
@@ -588,16 +630,25 @@ func (s *SQLiteStore) ResetPassword(userName, pwdHash string) error {
 	return err
 }
 
-// UpdatePassword 修改密码（直接设置新哈希，密码验证由 handler 层用 bcrypt 完成）
+// UpdatePassword 修改密码并清除密码过期时间
 func (s *SQLiteStore) UpdatePassword(userName, newPwdHash string) error {
 	_, err := s.db.Exec(
-		"UPDATE users SET user_pwd = ? WHERE user_name = ?",
+		"UPDATE users SET user_pwd = ?, pwd_expires_at = '' WHERE user_name = ?",
 		newPwdHash, userName,
 	)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+// ClearPwdExpiry 清除密码过期时间（修改密码后同步调用）
+func (s *SQLiteStore) ClearPwdExpiry(userName string) error {
+	_, err := s.db.Exec(
+		"UPDATE users SET pwd_expires_at = '' WHERE user_name = ?",
+		userName,
+	)
+	return err
 }
 
 // ============================================================

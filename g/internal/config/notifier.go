@@ -89,8 +89,8 @@ func (n *RedisNotifier) SubscribeChanges() <-chan struct{} {
 				select {
 				case <-n.stopCh:
 					if err := pubsub.Close(); err != nil {
-					slog.Warn("config pubsub close error", "error", err)
-				}
+						slog.Warn("config pubsub close error", "error", err)
+					}
 					return
 				case msg, ok := <-msgCh:
 					if !ok {

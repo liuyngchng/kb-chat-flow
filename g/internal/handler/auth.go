@@ -27,8 +27,8 @@ const tokenTTL = 2 * time.Hour
 
 // 登录限流配置
 const (
-	loginMaxFailures    = 5              // IP 最多连续失败次数
-	loginLockDuration   = 15 * time.Minute // 锁定时长
+	loginMaxFailures     = 5                // IP 最多连续失败次数
+	loginLockDuration    = 15 * time.Minute // 锁定时长
 	loginFailuresCleanup = 15 * time.Minute // 过期失败纪录清理间隔
 )
 
@@ -37,7 +37,7 @@ const cookieAuthToken = "auth_token"
 
 // loginFailRecord 登录失败记录
 type loginFailRecord struct {
-	count     int
+	count       int
 	lockedUntil time.Time
 }
 
@@ -110,11 +110,24 @@ func (h *AuthHandler) LoginPage(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "login.html", gin.H{
-		"page_title":   pageTitle,
-		"default_user": "user0",
-		"default_pwd":  "user0",
-		"error_msg":    "",
-		"debug":        h.cfg.Server.Debug,
+		"page_title":       pageTitle,
+		"error_msg":        "",
+		"debug":            h.cfg.Server.Debug,
+		"register_enabled": true,
+	})
+}
+
+// RegisterPage 注册页面
+func (h *AuthHandler) RegisterPage(c *gin.Context) {
+	pageTitle := h.cfg.Sys.Name
+	if h.cfg.Server.Role == model.SvcRoleAdmin {
+		pageTitle = h.cfg.Sys.Name + "系统管理"
+	}
+
+	msg := c.Query("msg")
+	c.HTML(http.StatusOK, "register.html", gin.H{
+		"page_title": pageTitle,
+		"msg":        msg,
 	})
 }
 
@@ -217,6 +230,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 登录成功，清除失败记录
 	h.clearLoginFailures(clientIP)
 
+	// 检查密码是否过期（仅 SQLite 单机版种子 admin 有此字段）
+	if !user.PwdExpiresAt.IsZero() && time.Now().After(user.PwdExpiresAt) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "密码已过期，请联系管理员重置"})
+		return
+	}
+	mustChangePwd := !user.PwdExpiresAt.IsZero()
+
 	// admin 实例：仅管理员可登录
 	if h.cfg.Server.Role == model.SvcRoleAdmin && user.Role != model.RoleAdmin {
 		c.JSON(http.StatusForbidden, gin.H{"error": "此账号无法访问管理后台"})
@@ -235,10 +255,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":    "ok",
-		"token":     token,
-		"user_name": user.UserName,
-		"role":      user.Role,
+		"status":          "ok",
+		"token":           token,
+		"user_name":       user.UserName,
+		"role":            user.Role,
+		"must_change_pwd": mustChangePwd,
 	})
 }
 
@@ -301,6 +322,7 @@ func clearAuthCookie(c *gin.Context) {
 		SameSite: http.SameSiteStrictMode,
 	})
 }
+
 // 浏览器用户：httpOnly Cookie 自动携带
 // API 用户：Authorization: Bearer xxx
 func extractToken(c *gin.Context) string {

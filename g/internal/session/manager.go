@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	MaxHistoryRounds       = 5                // 最多保留 5 轮（10 条消息）
-	MaxMessages            = MaxHistoryRounds * 2
-	SessionTimeout         = 30 * time.Minute
-	CleanupInterval        = 10 * time.Minute
-	PersistLoadLimit       = 20 // 从 DB 加载时最多取多少条
+	MaxHistoryRounds = 5 // 最多保留 5 轮（10 条消息）
+	MaxMessages      = MaxHistoryRounds * 2
+	SessionTimeout   = 30 * time.Minute
+	CleanupInterval  = 10 * time.Minute
+	PersistLoadLimit = 20 // 从 DB 加载时最多取多少条
 )
 
 // Manager 会话管理器，委托给 SessionStore 实现。

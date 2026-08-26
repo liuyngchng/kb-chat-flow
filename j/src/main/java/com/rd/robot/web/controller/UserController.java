@@ -119,6 +119,43 @@ public class UserController {
     }
 
     // ============================================================
+    // Self-service: User registration
+    // ============================================================
+
+    public void register(ChannelHandlerContext ctx, FullHttpRequest req) {
+        try {
+            String body = req.content().toString(CharsetUtil.UTF_8);
+            RegisterRequest regReq = MAPPER.readValue(body, RegisterRequest.class);
+
+            if (regReq.getUserName() == null || regReq.getUserName().isEmpty()
+                    || regReq.getUserPwd() == null || regReq.getUserPwd().isEmpty()) {
+                HttpServer.sendJson(ctx, 400, "{\"error\":\"用户名和密码不能为空\"}");
+                return;
+            }
+
+            // Validate password
+            PasswordEncoder.validatePassword(regReq.getUserPwd());
+
+            // Check username uniqueness
+            User existing = metaStore.getUserByName(regReq.getUserName());
+            if (existing != null) {
+                HttpServer.sendJson(ctx, 409, "{\"error\":\"用户名已被占用\"}");
+                return;
+            }
+
+            // Hash password with bcrypt
+            String pwdHash = PasswordEncoder.hashPassword(regReq.getUserPwd());
+
+            metaStore.createUser(regReq.getUserName(), pwdHash, User.ROLE_NORMAL, "自行注册");
+            HttpServer.sendJson(ctx, 200, "{\"status\":\"ok\"}");
+        } catch (IllegalArgumentException e) {
+            HttpServer.sendJson(ctx, 400, "{\"error\":\"" + e.getMessage() + "\"}");
+        } catch (Exception e) {
+            HttpServer.sendJson(ctx, 500, "{\"error\":\"注册失败: " + e.getMessage() + "\"}");
+        }
+    }
+
+    // ============================================================
     // Self-service: Change password
     // ============================================================
 

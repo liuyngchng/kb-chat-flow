@@ -46,11 +46,11 @@ func (h *PageHandler) Index(c *gin.Context) {
 	token := GetTokenStr(c)
 
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"sys_name":  h.cfg.Sys.Name,
+		"sys_name":   h.cfg.Sys.Name,
 		"page_title": h.pageTitle(),
-		"uid":       uid,
-		"role":      role,
-		"token":     token,
+		"uid":        uid,
+		"role":       role,
+		"token":      token,
 	})
 }
 
@@ -60,11 +60,11 @@ func (h *PageHandler) VdbIndex(c *gin.Context) {
 	token := GetTokenStr(c)
 
 	c.HTML(http.StatusOK, "vdb.html", gin.H{
-		"sys_name":  h.cfg.Sys.Name,
+		"sys_name":   h.cfg.Sys.Name,
 		"page_title": h.pageTitle(),
-		"uid":       uid,
-		"role":      role,
-		"token":     token,
+		"uid":        uid,
+		"role":       role,
+		"token":      token,
 	})
 }
 
@@ -74,11 +74,11 @@ func (h *PageHandler) VdbBindIndex(c *gin.Context) {
 	token := GetTokenStr(c)
 
 	c.HTML(http.StatusOK, "vdb_bind.html", gin.H{
-		"sys_name":  h.cfg.Sys.Name,
+		"sys_name":   h.cfg.Sys.Name,
 		"page_title": h.pageTitle(),
-		"uid":       uid,
-		"role":      role,
-		"token":     token,
+		"uid":        uid,
+		"role":       role,
+		"token":      token,
 	})
 }
 
@@ -101,10 +101,10 @@ func (h *PageHandler) ConfigIndex(c *gin.Context) {
 	token := GetTokenStr(c)
 
 	c.HTML(http.StatusOK, "config.html", gin.H{
-		"sys_name":  h.cfg.Sys.Name,
+		"sys_name":   h.cfg.Sys.Name,
 		"page_title": h.pageTitle(),
-		"uid":       uid,
-		"role":      role,
-		"token":     token,
+		"uid":        uid,
+		"role":       role,
+		"token":      token,
 	})
 }

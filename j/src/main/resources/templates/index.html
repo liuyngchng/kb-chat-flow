@@ -23,7 +23,7 @@
                 <a href="/user/api?t={{token}}" id="link-api" class="system-settings-link" target="_blank" style="display:none;">
                     <i class="fas fa-key"></i> API管理
                 </a>
-                <a href="#" id="link-agent" class="system-settings-link" onclick="showChangePwd(); return false;" style="display:none;">
+                <a href="#" id="link-agent" class="system-settings-link" onclick="showChangePwd(); return false;">
                     <i class="fas fa-lock"></i> 修改密码
                 </a>
                 <a href="#" class="system-settings-link" title="注销" onclick="logout(); return false;">
@@ -101,8 +101,6 @@
                 var banner = document.getElementById('welcome-admin');
                 if (banner) banner.style.display = '';
             } else if (userRole === 2) {
-                var el = document.getElementById('link-agent');
-                if (el) el.style.display = '';
                 var banner = document.getElementById('welcome-agent');
                 if (banner) banner.style.display = '';
             } else if (userRole === 3) {

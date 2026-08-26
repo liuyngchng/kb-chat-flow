@@ -18,14 +18,14 @@ import (
 
 // EngineEvent 工作流执行事件
 type EngineEvent struct {
-	Type          string `json:"type"`                      // "progress" | "chunk" | "done" | "error"
+	Type          string `json:"type"` // "progress" | "chunk" | "done" | "error"
 	Step          int    `json:"step"`
 	Total         int    `json:"total"`
 	Agent         string `json:"agent"`
-	Content       string `json:"content"`                    // chunk 或 error 内容
-	NodeID        string `json:"node_id,omitempty"`          // 节点 ID（DAG 模式）
-	ParallelGroup string `json:"parallel_group,omitempty"`   // 并行组名（DAG 模式）
-	Error         error  `json:"-"`                          // 内部使用
+	Content       string `json:"content"`                  // chunk 或 error 内容
+	NodeID        string `json:"node_id,omitempty"`        // 节点 ID（DAG 模式）
+	ParallelGroup string `json:"parallel_group,omitempty"` // 并行组名（DAG 模式）
+	Error         error  `json:"-"`                        // 内部使用
 }
 
 // dagNode DAG 调度内部节点
@@ -46,7 +46,7 @@ type Engine struct {
 	ftPredictor *fasttext.Predictor
 
 	// csm 各分支检索的知识库 id（从 sys_config 加载，可热更新）
-	bindingLock  sync.RWMutex
+	bindingLock   sync.RWMutex
 	billingVdbIDs []int64
 	repairVdbIDs  []int64
 	faqVdbIDs     []int64

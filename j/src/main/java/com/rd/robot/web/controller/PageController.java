@@ -139,10 +139,20 @@ public class PageController {
         try {
             String html = loadTemplate("templates/login.html")
                     .replace("{{page_title}}", pageTitle())
-                    .replace("{{default_user}}", "user0")
-                    .replace("{{default_pwd}}", "user0")
                     .replace("{{error_msg}}", "")
                     .replace("{{debug}}", String.valueOf(cfg.getServer().isDebug()));
+            HttpServer.sendHtml(ctx, html);
+        } catch (Exception e) {
+            HttpServer.sendError(ctx, io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR, "页面加载失败");
+        }
+    }
+
+    public void registerPage(ChannelHandlerContext ctx, FullHttpRequest request) {
+        try {
+            String msg = HttpServer.getQueryParam(request, "msg");
+            String html = loadTemplate("templates/register.html")
+                    .replace("{{page_title}}", pageTitle())
+                    .replace("{{msg}}", msg != null ? msg : "");
             HttpServer.sendHtml(ctx, html);
         } catch (Exception e) {
             HttpServer.sendError(ctx, io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR, "页面加载失败");

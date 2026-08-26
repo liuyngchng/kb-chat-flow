@@ -99,6 +99,7 @@ public class MysqlMetaStore implements MetaStore {
                 user_pwd VARCHAR(255) NOT NULL DEFAULT '',
                 role INT NOT NULL DEFAULT 0,
                 note VARCHAR(512) NOT NULL DEFAULT '',
+                pwd_expires_at DATETIME NULL DEFAULT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 INDEX idx_users_name (user_name)
@@ -187,24 +188,24 @@ public class MysqlMetaStore implements MetaStore {
     }
 
     private void seedUsers() {
-        try (Connection conn = ds.getConnection()) {
-            int count = queryInt(conn, "SELECT COUNT(*) FROM users");
-            if (count > 0) return;
+    try (Connection conn = ds.getConnection()) {
+        int count = queryInt(conn, "SELECT COUNT(*) FROM users");
+        if (count > 0) return;
 
-            String sql = "INSERT INTO users (user_name, user_pwd, role, note) VALUES (?, ?, ?, ?)";
-            for (var u : BUILTIN_USERS) {
-                try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                    ps.setString(1, u.userName);
-                    ps.setString(2, PasswordEncoder.hashPassword(u.userName));
-                    ps.setInt(3, u.role);
-                    ps.setString(4, u.note);
-                    ps.executeUpdate();
-                }
-            }
-        } catch (SQLException e) {
-            throw new RuntimeException("种子用户插入失败", e);
+        // 内置 API 调用用户
+        String apiPwdHash = PasswordEncoder.hashPassword("api0");
+        String sql = "INSERT INTO users (user_name, user_pwd, role, note) VALUES (?, ?, ?, ?)";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, "api0");
+            ps.setString(2, apiPwdHash);
+            ps.setInt(3, User.ROLE_API);
+            ps.setString(4, "内置API调用用户");
+            ps.executeUpdate();
         }
+    } catch (SQLException e) {
+        throw new RuntimeException("种子用户插入失败", e);
     }
+}
 
     private void seedDefaultAgent() {
         try (Connection conn = ds.getConnection()) {
@@ -472,7 +473,7 @@ public class MysqlMetaStore implements MetaStore {
 
     @Override
     public User getUserByLogin(String userName) {
-        String sql = "SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ?";
+        String sql = "SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users WHERE user_name = ?";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, userName);
@@ -486,7 +487,7 @@ public class MysqlMetaStore implements MetaStore {
 
     @Override
     public User getUserByName(String userName) {
-        String sql = "SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ?";
+        String sql = "SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users WHERE user_name = ?";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, userName);
@@ -500,7 +501,7 @@ public class MysqlMetaStore implements MetaStore {
 
     @Override
     public List<User> listUsers() {
-        String sql = "SELECT uid, user_name, user_pwd, role, note FROM users ORDER BY uid";
+        String sql = "SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users ORDER BY uid";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             try (ResultSet rs = ps.executeQuery()) {
@@ -530,7 +531,12 @@ public class MysqlMetaStore implements MetaStore {
 
     @Override
     public void updatePassword(String userName, String newPwdHash) {
-        execUpdate("UPDATE users SET user_pwd = ? WHERE user_name = ?", newPwdHash, userName);
+        execUpdate("UPDATE users SET user_pwd = ?, pwd_expires_at = NULL WHERE user_name = ?", newPwdHash, userName);
+    }
+
+    @Override
+    public void clearPwdExpiry(String userName) {
+        execUpdate("UPDATE users SET pwd_expires_at = NULL WHERE user_name = ?", userName);
     }
 
     @Override
@@ -1112,6 +1118,10 @@ public class MysqlMetaStore implements MetaStore {
         u.setUserPwd(rs.getString("user_pwd"));
         u.setRole(rs.getInt("role"));
         u.setNote(rs.getString("note"));
+        Timestamp expiresAt = rs.getTimestamp("pwd_expires_at");
+        if (expiresAt != null) {
+            u.setPwdExpiresAt(expiresAt.toLocalDateTime());
+        }
         return u;
     }
 
@@ -1154,14 +1164,4 @@ public class MysqlMetaStore implements MetaStore {
         return w;
     }
 
-    private static final BuiltinUser[] BUILTIN_USERS = {
-        new BuiltinUser("user0", User.ROLE_NORMAL, "内置普通用户"),
-        new BuiltinUser("user1", User.ROLE_NORMAL, "内置普通用户"),
-        new BuiltinUser("admin", User.ROLE_ADMIN, "内置管理员"),
-        new BuiltinUser("person0", User.ROLE_AGENT, "内置客服座席"),
-        new BuiltinUser("person1", User.ROLE_AGENT, "内置客服座席"),
-        new BuiltinUser("api0", User.ROLE_API, "内置API调用用户"),
-    };
-
-    private record BuiltinUser(String userName, int role, String note) {}
 }

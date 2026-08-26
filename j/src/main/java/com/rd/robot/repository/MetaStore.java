@@ -49,6 +49,7 @@ public interface MetaStore {
     void deleteUserByName(String userName);
     void resetPassword(String userName, String userPwdHash);
     void updatePassword(String userName, String newPwdHash);
+    void clearPwdExpiry(String userName);
 
     // ============================================================
     // API tokens

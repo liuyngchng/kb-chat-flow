@@ -98,6 +98,7 @@ public class SqliteMetaStore implements MetaStore {
                 user_pwd TEXT NOT NULL DEFAULT '',
                 role INTEGER NOT NULL DEFAULT 0,
                 note TEXT NOT NULL DEFAULT '',
+                pwd_expires_at TEXT NOT NULL DEFAULT '',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
@@ -183,24 +184,61 @@ public class SqliteMetaStore implements MetaStore {
     }
 
     private void seedUsers() {
-        try (Connection conn = ds.getConnection()) {
-            int count = queryInt(conn, "SELECT COUNT(*) FROM users");
-            if (count > 0) return;
+    try (Connection conn = ds.getConnection()) {
+        int count = queryInt(conn, "SELECT COUNT(*) FROM users");
+        if (count > 0) return;
 
-            String sql = "INSERT INTO users (user_name, user_pwd, role, note) VALUES (?, ?, ?, ?)";
-            for (var u : BUILTIN_USERS) {
-                try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                    ps.setString(1, u.userName);
-                    ps.setString(2, PasswordEncoder.hashPassword(u.userName));
-                    ps.setInt(3, u.role);
-                    ps.setString(4, u.note);
-                    ps.executeUpdate();
-                }
-            }
-        } catch (SQLException e) {
-            throw new RuntimeException("种子用户插入失败", e);
+        // 生成随机初始密码（12 位字母数字）
+        String adminPwd = randomPassword(12);
+        String pwdHash = PasswordEncoder.hashPassword(adminPwd);
+
+        // admin 密码 1 小时后过期，登录后强制修改
+        String expiresAt = LocalDateTime.now().plusHours(1).toString();
+        String sqlAdmin = "INSERT INTO users (user_name, user_pwd, role, note, pwd_expires_at) VALUES (?, ?, ?, ?, ?)";
+        try (PreparedStatement ps = conn.prepareStatement(sqlAdmin)) {
+            ps.setString(1, "admin");
+            ps.setString(2, pwdHash);
+            ps.setInt(3, User.ROLE_ADMIN);
+            ps.setString(4, "内置管理员");
+            ps.setString(5, expiresAt);
+            ps.executeUpdate();
         }
+
+        // 内置 API 调用用户
+        String apiPwdHash = PasswordEncoder.hashPassword("api0");
+        String sqlApi = "INSERT INTO users (user_name, user_pwd, role, note) VALUES (?, ?, ?, ?)";
+        try (PreparedStatement ps = conn.prepareStatement(sqlApi)) {
+            ps.setString(1, "api0");
+            ps.setString(2, apiPwdHash);
+            ps.setInt(3, User.ROLE_API);
+            ps.setString(4, "内置API调用用户");
+            ps.executeUpdate();
+        }
+
+        // 随机密码打印到控制台和日志文件
+        log.info("首次运行已创建管理员账号 user_name=admin initial_password={} expires_in=1h", adminPwd);
+        System.out.println("\n========================================");
+        System.out.println("  首次运行已创建管理员账号 admin");
+        System.out.println("  初始密码: " + adminPwd);
+        System.out.println("  该密码 1 小时内有效，登录后需立即修改密码");
+        System.out.println("========================================\n");
+    } catch (SQLException e) {
+        throw new RuntimeException("种子用户插入失败", e);
     }
+}
+
+/**
+ * 生成指定长度的随机字母数字密码（crypto/rand，密码学安全）
+ */
+private static String randomPassword(int length) {
+    String charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    java.security.SecureRandom random = new java.security.SecureRandom();
+    StringBuilder sb = new StringBuilder(length);
+    for (int i = 0; i < length; i++) {
+        sb.append(charset.charAt(random.nextInt(charset.length())));
+    }
+    return sb.toString();
+}
 
     private void seedDefaultAgent() {
         try (Connection conn = ds.getConnection()) {
@@ -481,7 +519,7 @@ public class SqliteMetaStore implements MetaStore {
 
     @Override
     public User getUserByLogin(String userName) {
-        String sql = "SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ?";
+        String sql = "SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users WHERE user_name = ?";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, userName);
@@ -495,7 +533,7 @@ public class SqliteMetaStore implements MetaStore {
 
     @Override
     public User getUserByName(String userName) {
-        String sql = "SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ?";
+        String sql = "SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users WHERE user_name = ?";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, userName);
@@ -509,7 +547,7 @@ public class SqliteMetaStore implements MetaStore {
 
     @Override
     public List<User> listUsers() {
-        String sql = "SELECT uid, user_name, user_pwd, role, note FROM users ORDER BY uid";
+        String sql = "SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users ORDER BY uid";
         try (Connection conn = ds.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             try (ResultSet rs = ps.executeQuery()) {
@@ -551,7 +589,12 @@ public class SqliteMetaStore implements MetaStore {
 
     @Override
     public void updatePassword(String userName, String newPwdHash) {
-        execUpdate("UPDATE users SET user_pwd = ? WHERE user_name = ?", newPwdHash, userName);
+        execUpdate("UPDATE users SET user_pwd = ?, pwd_expires_at = '' WHERE user_name = ?", newPwdHash, userName);
+    }
+
+    @Override
+    public void clearPwdExpiry(String userName) {
+        execUpdate("UPDATE users SET pwd_expires_at = '' WHERE user_name = ?", userName);
     }
 
     // ============================================================
@@ -1208,6 +1251,12 @@ public class SqliteMetaStore implements MetaStore {
         u.setUserPwd(rs.getString("user_pwd"));
         u.setRole(rs.getInt("role"));
         u.setNote(rs.getString("note"));
+        String expiresAt = rs.getString("pwd_expires_at");
+        if (expiresAt != null && !expiresAt.isEmpty()) {
+            try {
+                u.setPwdExpiresAt(LocalDateTime.parse(expiresAt));
+            } catch (Exception ignored) {}
+        }
         return u;
     }
 
@@ -1255,17 +1304,6 @@ public class SqliteMetaStore implements MetaStore {
     // ============================================================
     // Constants
     // ============================================================
-
-    private static final BuiltinUser[] BUILTIN_USERS = {
-        new BuiltinUser("user0", User.ROLE_NORMAL, "内置普通用户"),
-        new BuiltinUser("user1", User.ROLE_NORMAL, "内置普通用户"),
-        new BuiltinUser("admin", User.ROLE_ADMIN, "内置管理员"),
-        new BuiltinUser("person0", User.ROLE_AGENT, "内置客服座席"),
-        new BuiltinUser("person1", User.ROLE_AGENT, "内置客服座席"),
-        new BuiltinUser("api0", User.ROLE_API, "内置API调用用户"),
-    };
-
-    private record BuiltinUser(String userName, int role, String note) {}
 
     /**
      * Default agent system prompt for workflow engine (uses {{sys.xxx}} variable syntax).

@@ -162,20 +162,20 @@ func main() {
 	// 集群模式 + chat 角色：启动配置热加载监听（admin 修改配置后自动同步）
 	if isChat && !isAdmin {
 		if ch := notifier.SubscribeChanges(); ch != nil {
-		go func() {
-			slog.Info("配置热加载监听已启动")
-			for range ch {
-				slog.Info("收到配置变更通知，重新加载配置...")
-				if err := config.ReloadRuntimeConfig(metaStore, cfg); err != nil {
-					slog.Warn("热加载运行时配置失败", "error", err)
+			go func() {
+				slog.Info("配置热加载监听已启动")
+				for range ch {
+					slog.Info("收到配置变更通知，重新加载配置...")
+					if err := config.ReloadRuntimeConfig(metaStore, cfg); err != nil {
+						slog.Warn("热加载运行时配置失败", "error", err)
+					}
+					if eng := h.GetEngine(); eng != nil {
+						eng.ReloadVdbBindings()
+					}
 				}
-				if eng := h.GetEngine(); eng != nil {
-					eng.ReloadVdbBindings()
-				}
-			}
-			slog.Info("配置热加载监听已停止")
-		}()
-	}
+				slog.Info("配置热加载监听已停止")
+			}()
+		}
 	}
 
 	// 设置 Gin 路由
@@ -210,6 +210,12 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 	r.GET("/login", h.Auth.LoginPage)
+	r.GET("/register", h.Auth.RegisterPage)
+
+	// 公开 API（无需认证）
+	r.POST("/api/login", h.Auth.Login)
+	r.POST("/api/logout", h.Auth.Logout)
+	r.POST("/api/register", h.User.Register)
 
 	// admin 实例：根路径重定向到系统管理页（保留 token 等查询参数）
 	if isAdmin && !isChat {
@@ -221,10 +227,6 @@ func main() {
 			c.Redirect(http.StatusFound, target)
 		})
 	}
-
-	// 认证 API（JSON）
-	r.POST("/api/login", h.Auth.Login)
-	r.POST("/api/logout", h.Auth.Logout)
 
 	// ============================================================
 	// 路由注册（按 server.role 区分）

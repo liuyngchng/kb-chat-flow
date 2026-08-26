@@ -51,6 +51,7 @@ type MetaStore interface {
 	DeleteUserByName(userName string) error
 	ResetPassword(userName string, userPwdHash string) error
 	UpdatePassword(userName string, newPwdHash string) error
+	ClearPwdExpiry(userName string) error
 
 	// ============================================================
 	// API Token

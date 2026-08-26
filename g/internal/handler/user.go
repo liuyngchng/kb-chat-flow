@@ -185,6 +185,49 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+// Register 用户自助注册 POST /api/register（无需认证）
+func (h *UserHandler) Register(c *gin.Context) {
+	var req model.RegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误: " + err.Error()})
+		return
+	}
+
+	if req.UserName == "" || req.UserPwd == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "用户名和密码不能为空"})
+		return
+	}
+
+	if err := store.ValidatePassword(req.UserPwd); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 检查用户名是否已存在
+	existing, err := h.store.GetUserByName(req.UserName)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询用户失败: " + err.Error()})
+		return
+	}
+	if existing != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "用户名已被占用"})
+		return
+	}
+
+	pwdHash, err := store.HashPassword(req.UserPwd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "密码哈希失败"})
+		return
+	}
+
+	if err := h.store.CreateUser(req.UserName, pwdHash, model.RoleNormal, "自行注册"); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "注册失败: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
 // ============================================================
 // API Token 管理（RoleAPI 用户）
 // ============================================================
@@ -281,6 +324,7 @@ func ApiCallLogMiddleware(store store.MetaStore) gin.HandlerFunc {
 	// 敏感路径：请求体不应记录到日志
 	sensitivePaths := map[string]bool{
 		"/api/login":         true,
+		"/api/register":      true,
 		"/api/user/password": true,
 		"/api/users":         true, // 创建/重置密码也在此路径
 	}

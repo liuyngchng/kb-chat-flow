@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -83,6 +84,13 @@ public class AuthController {
             // Login success, clear failure record
             clearLoginFailures(clientIP);
 
+            // 检查密码是否过期（仅 SQLite 单机版种子 admin 有此字段）
+            if (user.getPwdExpiresAt() != null && LocalDateTime.now().isAfter(user.getPwdExpiresAt())) {
+                HttpServer.sendJson(ctx, 403, "{\"error\":\"密码已过期，请联系管理员重置\"}");
+                return;
+            }
+            boolean mustChangePwd = user.getPwdExpiresAt() != null;
+
             // admin 实例：仅管理员可登录
             if (cfg.getServer().isAdminOnly() && user.getRole() != User.ROLE_ADMIN) {
                 HttpServer.sendJson(ctx, 403, "{\"error\":\"此账号无法访问管理后台\"}");
@@ -104,7 +112,8 @@ public class AuthController {
                     "status", "ok",
                     "token", token,
                     "user_name", user.getUserName(),
-                    "role", user.getRole()
+                    "role", user.getRole(),
+                    "must_change_pwd", mustChangePwd
             );
             HttpServer.sendJson(ctx, 200, MAPPER.writeValueAsString(resp));
 

@@ -106,6 +106,7 @@ func (s *MySQLStore) migrate() error {
 			user_pwd VARCHAR(255) NOT NULL DEFAULT '',
 			role INT NOT NULL DEFAULT 0,
 			note VARCHAR(512) NOT NULL DEFAULT '',
+			pwd_expires_at DATETIME NULL DEFAULT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			INDEX idx_users_name (user_name)
@@ -457,33 +458,34 @@ func (s *MySQLStore) UpsertPrompt(name, value string, uid int) error {
 // GetUserByLogin 按用户名查询用户（密码验证由 handler 层用 bcrypt 完成）
 func (s *MySQLStore) GetUserByLogin(userName string) (*model.User, error) {
 	row := s.db.QueryRow(
-		"SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ?",
+		"SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users WHERE user_name = ?",
 		userName,
 	)
-	var u model.User
-	err := row.Scan(&u.UID, &u.UserName, &u.UserPwd, &u.Role, &u.Note)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &u, nil
+	return scanMySQLUser(row)
 }
 
 // GetUserByName 按用户名查询用户
 func (s *MySQLStore) GetUserByName(userName string) (*model.User, error) {
 	row := s.db.QueryRow(
-		"SELECT uid, user_name, user_pwd, role, note FROM users WHERE user_name = ?",
+		"SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users WHERE user_name = ?",
 		userName,
 	)
+	return scanMySQLUser(row)
+}
+
+// scanMySQLUser 扫描 users 行，解析 pwd_expires_at（NULL = 无过期限制）
+func scanMySQLUser(row *sql.Row) (*model.User, error) {
 	var u model.User
-	err := row.Scan(&u.UID, &u.UserName, &u.UserPwd, &u.Role, &u.Note)
+	var expiresAt sql.NullTime
+	err := row.Scan(&u.UID, &u.UserName, &u.UserPwd, &u.Role, &u.Note, &expiresAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	if expiresAt.Valid {
+		u.PwdExpiresAt = expiresAt.Time
 	}
 	return &u, nil
 }
@@ -505,11 +507,6 @@ func (s *MySQLStore) seedUsers() error {
 		role     int
 		note     string
 	}{
-		{"user0", model.RoleNormal, "内置普通用户"},
-		{"user1", model.RoleNormal, "内置普通用户"},
-		{"admin", model.RoleAdmin, "内置管理员"},
-		{"person0", model.RoleAgent, "内置客服座席"},
-		{"person1", model.RoleAgent, "内置客服座席"},
 		{"api0", model.RoleAPI, "内置API调用用户"},
 	}
 
@@ -535,7 +532,7 @@ func (s *MySQLStore) seedUsers() error {
 // ListUsers 获取所有用户列表
 func (s *MySQLStore) ListUsers() ([]model.User, error) {
 	rows, err := s.db.Query(
-		"SELECT uid, user_name, user_pwd, role, note FROM users ORDER BY uid",
+		"SELECT uid, user_name, user_pwd, role, note, pwd_expires_at FROM users ORDER BY uid",
 	)
 	if err != nil {
 		return nil, err
@@ -545,8 +542,12 @@ func (s *MySQLStore) ListUsers() ([]model.User, error) {
 	var users []model.User
 	for rows.Next() {
 		var u model.User
-		if err := rows.Scan(&u.UID, &u.UserName, &u.UserPwd, &u.Role, &u.Note); err != nil {
+		var expiresAt sql.NullTime
+		if err := rows.Scan(&u.UID, &u.UserName, &u.UserPwd, &u.Role, &u.Note, &expiresAt); err != nil {
 			return nil, err
+		}
+		if expiresAt.Valid {
+			u.PwdExpiresAt = expiresAt.Time
 		}
 		users = append(users, u)
 	}
@@ -577,16 +578,25 @@ func (s *MySQLStore) ResetPassword(userName, pwdHash string) error {
 	return err
 }
 
-// UpdatePassword 修改密码（直接设置新哈希，密码验证由 handler 层用 bcrypt 完成）
+// UpdatePassword 修改密码并清除密码过期时间
 func (s *MySQLStore) UpdatePassword(userName, newPwdHash string) error {
 	_, err := s.db.Exec(
-		"UPDATE users SET user_pwd = ? WHERE user_name = ?",
+		"UPDATE users SET user_pwd = ?, pwd_expires_at = NULL WHERE user_name = ?",
 		newPwdHash, userName,
 	)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+// ClearPwdExpiry 清除密码过期时间（修改密码后同步调用）
+func (s *MySQLStore) ClearPwdExpiry(userName string) error {
+	_, err := s.db.Exec(
+		"UPDATE users SET pwd_expires_at = NULL WHERE user_name = ?",
+		userName,
+	)
+	return err
 }
 
 // ============================================================

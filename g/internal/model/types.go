@@ -115,6 +115,7 @@ type APIConfig struct {
 // 认证二选一：
 //   - token:            API Key 认证（云服务商提供的 token）
 //   - username/password: 用户名/密码认证（自建 Milvus 默认 root + 密码）
+//
 // 两者都留空则走免认证连接。
 type MilvusConfig struct {
 	URI      string `yaml:"uri"`
@@ -145,7 +146,7 @@ type RedisConfig struct {
 
 // OSSConfig 对象存储配置（集群模式使用）
 type OSSConfig struct {
-	Type      string `yaml:"type"`      // "minio" | "s3" | "aliyun"
+	Type      string `yaml:"type"` // "minio" | "s3" | "aliyun"
 	Endpoint  string `yaml:"endpoint"`
 	AccessKey string `yaml:"access_key"`
 	SecretKey string `yaml:"secret_key"`
@@ -328,11 +329,12 @@ const (
 
 // User 用户信息
 type User struct {
-	UID      int64  `json:"uid"`
-	UserName string `json:"user_name"`
-	UserPwd  string `json:"-"` // MD5，不返回给客户端
-	Role     int    `json:"role"`
-	Note     string `json:"note"`
+	UID          int64     `json:"uid"`
+	UserName     string    `json:"user_name"`
+	UserPwd      string    `json:"-"` // bcrypt 哈希，不返回给客户端
+	Role         int       `json:"role"`
+	Note         string    `json:"note"`
+	PwdExpiresAt time.Time `json:"-"` // 密码过期时间，零值 = 无过期限制
 }
 
 // ApiToken API 调用 token 记录
@@ -378,6 +380,12 @@ type ResetPwdRequest struct {
 type ChangePwdRequest struct {
 	OldPwd string `json:"old_pwd" binding:"required"`
 	NewPwd string `json:"new_pwd" binding:"required"`
+}
+
+// RegisterRequest 用户自助注册请求
+type RegisterRequest struct {
+	UserName string `json:"user_name" binding:"required"`
+	UserPwd  string `json:"user_pwd" binding:"required"`
 }
 
 // ConfigEntry 系统配置项（用于 API 响应）
