@@ -38,6 +38,8 @@ export function findDuplicateOutputVars(
     switch (data.nodeType) {
       case 'agent':
       case 'tool':
+      case 'llm':
+      case 'knowledge-retrieval':
         outputVar = (data as any).outputVar || '';
         break;
     }
@@ -102,6 +104,8 @@ export function getUpstreamVars(
     switch (data.nodeType) {
       case 'agent':
       case 'tool':
+      case 'llm':
+      case 'knowledge-retrieval':
         outputVar = (data as any).outputVar || '';
         break;
     }
@@ -179,6 +183,8 @@ export function validateWorkflow(
       template = (data as any).inputTemplate || '';
     } else if (data.nodeType === 'tool') {
       template = (data as any).toolParams || '';
+    } else if (data.nodeType === 'llm') {
+      template = ((data as any).systemPrompt || '') + ' ' + ((data as any).userPrompt || '');
     }
 
     if (template) {
@@ -200,7 +206,7 @@ export function validateWorkflow(
   for (const node of nodes) {
     const data = node.data as unknown as AppNodeData;
     let outputVar = '';
-    if (data.nodeType === 'agent' || data.nodeType === 'tool') {
+    if (data.nodeType === 'agent' || data.nodeType === 'tool' || data.nodeType === 'llm' || data.nodeType === 'knowledge-retrieval') {
       outputVar = (data as any).outputVar || '';
     }
     if (!outputVar) continue;

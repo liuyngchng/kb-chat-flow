@@ -1,13 +1,16 @@
 // ============================================================
 // 工作流设计工具的 TypeScript 类型定义
 // 专注头脑风暴 + 自描述导出，不依赖后端
+// 支持原生节点 + Dify 平台节点
 // ============================================================
 
 // ============================================================
 // 节点类型
 // ============================================================
 
-export type NodeType = 'start' | 'agent' | 'tool' | 'variable' | 'branch' | 'note';
+export type NodeType = 'start' | 'agent' | 'tool' | 'variable' | 'branch' | 'note'
+  // Dify 原生节点类型
+  | 'llm' | 'code' | 'answer' | 'knowledge-retrieval' | 'question-classifier' | 'assigner' | 'if-else';
 
 // ============================================================
 // React Flow 内部节点 data 类型
@@ -64,6 +67,134 @@ export interface NoteNodeData {
   color: string;
 }
 
+// ============================================================
+// Dify 原生节点类型
+// ============================================================
+
+export interface LLMNodeData {
+  nodeType: 'llm';
+  label: string;
+  purpose: string;
+  /** 模型名称，如 deepseek-chat */
+  modelName: string;
+  /** 模型提供商，如 langgenius/deepseek/deepseek */
+  modelProvider: string;
+  /** 温度等参数 JSON */
+  completionParams: string;
+  /** system prompt 文本 */
+  systemPrompt: string;
+  /** user prompt 文本 */
+  userPrompt: string;
+  /** 上下文变量选择器（JSON 字符串） */
+  contextVar: string;
+  /** 记忆窗口大小，0=不启用 */
+  memoryWindow: number;
+  /** 输出变量名 */
+  outputVar: string;
+  /** 并行组 */
+  parallelGroup: string;
+}
+
+export interface CodeNodeData {
+  nodeType: 'code';
+  label: string;
+  purpose: string;
+  /** Python 代码 */
+  code: string;
+  /** 输入变量定义（JSON 字符串） */
+  inputVars: string;
+  /** 输出变量定义（JSON 字符串） */
+  outputs: string;
+  /** 并行组 */
+  parallelGroup: string;
+}
+
+export interface AnswerNodeData {
+  nodeType: 'answer';
+  label: string;
+  purpose: string;
+  /** 回复文本内容 */
+  answerText: string;
+  /** 并行组 */
+  parallelGroup: string;
+}
+
+export interface KnowledgeRetrievalNodeData {
+  nodeType: 'knowledge-retrieval';
+  label: string;
+  purpose: string;
+  /** 知识库 dataset IDs（逗号分隔） */
+  datasetIds: string;
+  /** 查询变量选择器 */
+  queryVar: string;
+  /** 检索模式: single | multiple */
+  retrievalMode: string;
+  /** Top K */
+  topK: number;
+  /** 重排序模型 */
+  rerankingModel: string;
+  /** 重排序是否启用 */
+  rerankingEnable: boolean;
+  /** 分数阈值 */
+  scoreThreshold: string;
+  /** 输出变量名 */
+  outputVar: string;
+  /** 并行组 */
+  parallelGroup: string;
+}
+
+export interface QuestionClassifierNodeData {
+  nodeType: 'question-classifier';
+  label: string;
+  purpose: string;
+  /** 分类定义（JSON 字符串: [{id, name}]） */
+  classes: string;
+  /** 分类指令 */
+  instructions: string;
+  /** 查询变量选择器 */
+  queryVar: string;
+  /** 模型名称 */
+  modelName: string;
+  /** 模型提供商 */
+  modelProvider: string;
+  /** 记忆是否启用 */
+  memoryEnabled: boolean;
+  /** 并行组 */
+  parallelGroup: string;
+}
+
+export interface AssignerNodeData {
+  nodeType: 'assigner';
+  label: string;
+  purpose: string;
+  /** 赋值项列表（JSON 字符串） */
+  items: string;
+  /** 并行组 */
+  parallelGroup: string;
+}
+
+/** if-else 分支条件 */
+export interface IfElseCase {
+  caseId: string;
+  conditions: {
+    comparisonOperator: string;
+    value: string;
+    varType: string;
+    variableSelector: string[];
+  }[];
+  logicalOperator: 'and' | 'or';
+}
+
+export interface IfElseNodeData {
+  nodeType: 'if-else';
+  label: string;
+  purpose: string;
+  /** 条件分支列表（JSON 字符串） */
+  cases: string;
+  /** 并行组 */
+  parallelGroup: string;
+}
+
 /** 所有节点 data 的联合类型 */
 export type AppNodeData =
   | StartNodeData
@@ -71,7 +202,15 @@ export type AppNodeData =
   | ToolNodeData
   | VariableNodeData
   | BranchNodeData
-  | NoteNodeData;
+  | NoteNodeData
+  // Dify 节点
+  | LLMNodeData
+  | CodeNodeData
+  | AnswerNodeData
+  | KnowledgeRetrievalNodeData
+  | QuestionClassifierNodeData
+  | AssignerNodeData
+  | IfElseNodeData;
 
 // ============================================================
 // 自描述导出格式 — 用于导出 JSON，AI 可直接读懂
@@ -104,6 +243,45 @@ export interface DesignDocNode {
   // Note 相关
   content?: string;
   color?: string;
+
+  // ---- Dify 节点字段 ----
+
+  // LLM 相关
+  modelName?: string;
+  modelProvider?: string;
+  completionParams?: string;
+  systemPrompt?: string;
+  userPrompt?: string;
+  contextVar?: string;
+  memoryWindow?: number;
+
+  // Code 相关
+  code?: string;
+  inputVars?: string;
+  outputs?: string;
+
+  // Answer 相关
+  answerText?: string;
+
+  // Knowledge Retrieval 相关
+  datasetIds?: string;
+  queryVar?: string;
+  retrievalMode?: string;
+  topK?: number;
+  rerankingModel?: string;
+  rerankingEnable?: boolean;
+  scoreThreshold?: string;
+
+  // Question Classifier 相关
+  classes?: string;
+  instructions?: string;
+  memoryEnabled?: boolean;
+
+  // Assigner 相关
+  items?: string;
+
+  // If-Else 相关
+  cases?: string;
 }
 
 /** 导出格式中的边 */
@@ -112,6 +290,8 @@ export interface DesignDocEdge {
   to: string;
   /** 分支条件：匹配时走此边，default 表示兜底，无值表示无条件 */
   condition?: string;
+  /** Dify 的 sourceHandle */
+  sourceHandle?: string;
   /** @deprecated 使用 condition */
   label?: string;
 }
@@ -119,7 +299,7 @@ export interface DesignDocEdge {
 /** 自描述工作流设计文档 */
 export interface DesignDoc {
   /** schema 版本，AI 可据此判断格式 */
-  _schema: 'workflow-design-doc/v1';
+  _schema: 'workflow-design-doc/v1' | 'workflow-design-doc/v2';
   /** 工作流名称 */
   name: string;
   /** 简短描述 */

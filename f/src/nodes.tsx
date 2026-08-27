@@ -1,6 +1,10 @@
 import React, { memo } from 'react';
 import { Handle, Position } from '@xyflow/react';
-import type { AgentNodeData, ToolNodeData, VariableNodeData, BranchNodeData, StartNodeData, NoteNodeData } from './types';
+import type {
+  AgentNodeData, ToolNodeData, VariableNodeData, BranchNodeData, StartNodeData, NoteNodeData,
+  LLMNodeData, CodeNodeData, AnswerNodeData, KnowledgeRetrievalNodeData,
+  QuestionClassifierNodeData, AssignerNodeData, IfElseNodeData,
+} from './types';
 
 // ============================================================
 // Font Awesome 图标
@@ -25,15 +29,15 @@ const card: React.CSSProperties = {
   transition: 'border-color 0.2s, box-shadow 0.2s',
 };
 
-const header: React.CSSProperties = {
+const header = (grad: string): React.CSSProperties => ({
   display: 'flex',
   alignItems: 'center',
   gap: 8,
   padding: '9px 14px',
-  background: 'linear-gradient(to right, #4b6cb7, #182848)',
+  background: `linear-gradient(to right, ${grad})`,
   color: '#fff',
   borderBottom: 'none',
-};
+});
 
 const body: React.CSSProperties = {
   padding: '10px 14px',
@@ -70,6 +74,13 @@ const handleStyle = (color: string): React.CSSProperties => ({
   background: color,
 });
 
+const mono = (color: string): React.CSSProperties => ({
+  ...row,
+  fontFamily: 'Consolas, Monaco, monospace',
+  fontSize: 12,
+  color,
+});
+
 // ============================================================
 // StartNode
 // ============================================================
@@ -78,7 +89,7 @@ export const StartNode = memo(function StartNode({ data }: { data: StartNodeData
   const c = '#4b6cb7';
   return (
     <div style={card}>
-      <div style={header}>
+      <div style={header('#4b6cb7, #182848')}>
         <Fa icon="fa-play" /> <span style={{ fontWeight: 600, fontSize: 13 }}>{data.label}</span>
       </div>
       <div style={body}>
@@ -98,7 +109,7 @@ export const AgentNode = memo(function AgentNode({ data }: { data: AgentNodeData
   const c = '#4b6cb7';
   return (
     <div style={card}>
-      <div style={header}>
+      <div style={header('#4b6cb7, #182848')}>
         <Fa icon="fa-robot" /> <span style={{ fontWeight: 600, fontSize: 13 }}>{data.label}</span>
       </div>
       <div style={body}>
@@ -120,7 +131,7 @@ export const ToolNode = memo(function ToolNode({ data }: { data: ToolNodeData })
   const c = '#4b6cb7';
   return (
     <div style={card}>
-      <div style={header}>
+      <div style={header('#4b6cb7, #182848')}>
         <Fa icon="fa-wrench" /> <span style={{ fontWeight: 600, fontSize: 13 }}>{data.label}</span>
       </div>
       <div style={body}>
@@ -142,11 +153,11 @@ export const VariableNode = memo(function VariableNode({ data }: { data: Variabl
   const c = '#4b6cb7';
   return (
     <div style={card}>
-      <div style={header}>
+      <div style={header('#4b6cb7, #182848')}>
         <Fa icon="fa-database" /> <span style={{ fontWeight: 600, fontSize: 13 }}>{data.label}</span>
       </div>
       <div style={body}>
-        <code style={{ ...row, fontFamily: 'Consolas, Monaco, monospace', fontSize: 12, color: '#4b6cb7' }}>
+        <code style={mono('#4b6cb7')}>
           {`{{${data.varName}}}`}
         </code>
         {data.purpose && <span style={{ ...row, color: '#888', fontStyle: 'italic' }}>💡 {data.purpose}</span>}
@@ -167,7 +178,7 @@ export const BranchNode = memo(function BranchNode({ data }: { data: BranchNodeD
       ...card,
       borderLeft: `6px solid #e67e22`,
     }}>
-      <div style={header}>
+      <div style={header('#4b6cb7, #182848')}>
         <Fa icon="fa-code-branch" /> <span style={{ fontWeight: 600, fontSize: 13 }}>{data.label}</span>
         <span style={{ marginLeft: 'auto', fontSize: 9, background: 'rgba(255,255,255,0.2)', padding: '2px 7px', borderRadius: 4 }}>
           SWITCH
@@ -220,6 +231,121 @@ export const NoteNode = memo(function NoteNode({ data }: { data: NoteNodeData })
 });
 
 // ============================================================
+// Dify 节点组件
+// ============================================================
+
+/** 通用 Dify 卡片：头部渐变 + 图标 + 标题 + 徽章 */
+function DifyCard({ icon, label, badge, grad, children, color }: {
+  icon: string; label: string; badge?: string; grad: string;
+  children: React.ReactNode; color: string;
+}) {
+  return (
+    <div style={{ ...card, borderLeft: `6px solid ${color}` }}>
+      <div style={header(grad)}>
+        <Fa icon={icon} /> <span style={{ fontWeight: 600, fontSize: 13 }}>{label}</span>
+        {badge && <span style={{ marginLeft: 'auto', fontSize: 9, background: 'rgba(255,255,255,0.2)', padding: '2px 7px', borderRadius: 4 }}>{badge}</span>}
+      </div>
+      <div style={body}>{children}</div>
+      <Handle type="target" position={Position.Left} style={handleStyle(color)} />
+      <Handle type="source" position={Position.Right} style={handleStyle(color)} />
+    </div>
+  );
+}
+
+// ---- LLM ----
+export const LLMNode = memo(function LLMNode({ data }: { data: LLMNodeData }) {
+  const c = '#10b981';
+  return (
+    <DifyCard icon="fa-brain" label={data.label} badge="LLM" grad="#10b981, #059669" color={c}>
+      {data.modelName && <span style={row}>模型: {data.modelName}</span>}
+      {data.systemPrompt && <span style={row}>系统提示: {data.systemPrompt.slice(0, 40)}{data.systemPrompt.length > 40 ? '…' : ''}</span>}
+      {data.memoryWindow > 0 && <span style={tag('#d1fae5', '#047857')}>记忆 {data.memoryWindow} 轮</span>}
+      {data.purpose && <span style={{ ...row, color: '#888', fontStyle: 'italic' }}>💡 {data.purpose}</span>}
+    </DifyCard>
+  );
+});
+
+// ---- Code ----
+export const CodeNode = memo(function CodeNode({ data }: { data: CodeNodeData }) {
+  const c = '#f59e0b';
+  return (
+    <DifyCard icon="fa-code" label={data.label} badge="CODE" grad="#f59e0b, #d97706" color={c}>
+      {data.code && <span style={row}>代码: {data.code.slice(0, 40)}{data.code.length > 40 ? '…' : ''}</span>}
+      {data.purpose && <span style={{ ...row, color: '#888', fontStyle: 'italic' }}>💡 {data.purpose}</span>}
+    </DifyCard>
+  );
+});
+
+// ---- Answer ----
+export const AnswerNode = memo(function AnswerNode({ data }: { data: AnswerNodeData }) {
+  const c = '#3b82f6';
+  return (
+    <DifyCard icon="fa-comment-dots" label={data.label} badge="ANSWER" grad="#3b82f6, #2563eb" color={c}>
+      {data.answerText && <span style={row}>回复: {data.answerText.slice(0, 40)}{data.answerText.length > 40 ? '…' : ''}</span>}
+      {data.purpose && <span style={{ ...row, color: '#888', fontStyle: 'italic' }}>💡 {data.purpose}</span>}
+    </DifyCard>
+  );
+});
+
+// ---- Knowledge Retrieval ----
+export const KnowledgeRetrievalNode = memo(function KnowledgeRetrievalNode({ data }: { data: KnowledgeRetrievalNodeData }) {
+  const c = '#8b5cf6';
+  return (
+    <DifyCard icon="fa-book" label={data.label} badge="RETRIEVE" grad="#8b5cf6, #7c3aed" color={c}>
+      {data.datasetIds && <span style={row}>知识库: {data.datasetIds.split(',').length} 个</span>}
+      <span style={row}>模式: {data.retrievalMode === 'multiple' ? '多路检索' : '单路检索'} · Top{data.topK}</span>
+      {data.rerankingEnable && <span style={tag('#ede9fe', '#6d28d9')}>重排: {data.rerankingModel}</span>}
+      {data.purpose && <span style={{ ...row, color: '#888', fontStyle: 'italic' }}>💡 {data.purpose}</span>}
+    </DifyCard>
+  );
+});
+
+// ---- Question Classifier ----
+export const QuestionClassifierNode = memo(function QuestionClassifierNode({ data }: { data: QuestionClassifierNodeData }) {
+  const c = '#06b6d4';
+  let classNames: string[] = [];
+  try {
+    classNames = JSON.parse(data.classes).map((c: any) => c.name);
+  } catch { /* ignore */ }
+  return (
+    <DifyCard icon="fa-tags" label={data.label} badge="CLASSIFY" grad="#06b6d4, #0891b2" color={c}>
+      {classNames.length > 0 && <span style={row}>分类: {classNames.slice(0, 4).join(' / ')}{classNames.length > 4 ? '…' : ''}</span>}
+      {data.purpose && <span style={{ ...row, color: '#888', fontStyle: 'italic' }}>💡 {data.purpose}</span>}
+    </DifyCard>
+  );
+});
+
+// ---- Assigner ----
+export const AssignerNode = memo(function AssignerNode({ data }: { data: AssignerNodeData }) {
+  const c = '#6b7280';
+  let count = 0;
+  try {
+    count = JSON.parse(data.items).length;
+  } catch { /* ignore */ }
+  return (
+    <DifyCard icon="fa-list-check" label={data.label} badge="ASSIGN" grad="#6b7280, #4b5563" color={c}>
+      {count > 0 && <span style={row}>赋值项: {count} 个</span>}
+      {data.purpose && <span style={{ ...row, color: '#888', fontStyle: 'italic' }}>💡 {data.purpose}</span>}
+    </DifyCard>
+  );
+});
+
+// ---- If-Else ----
+export const IfElseNode = memo(function IfElseNode({ data }: { data: IfElseNodeData }) {
+  const c = '#ef4444';
+  let caseCount = 0;
+  try {
+    caseCount = JSON.parse(data.cases).length;
+  } catch { /* ignore */ }
+  return (
+    <DifyCard icon="fa-code-branch" label={data.label} badge="IF-ELSE" grad="#ef4444, #dc2626" color={c}>
+      {caseCount > 0 && <span style={row}>分支数: {caseCount} 个</span>}
+      {data.purpose && <span style={{ ...row, color: '#888', fontStyle: 'italic' }}>💡 {data.purpose}</span>}
+    </DifyCard>
+  );
+});
+
+// ============================================================
 // 注册表
 // ============================================================
 
@@ -230,4 +356,12 @@ export const nodeTypes = {
   variable: VariableNode,
   branch: BranchNode,
   note: NoteNode,
+  // Dify 节点
+  llm: LLMNode,
+  code: CodeNode,
+  answer: AnswerNode,
+  'knowledge-retrieval': KnowledgeRetrievalNode,
+  'question-classifier': QuestionClassifierNode,
+  assigner: AssignerNode,
+  'if-else': IfElseNode,
 };

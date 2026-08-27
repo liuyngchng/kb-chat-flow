@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { Node, Edge } from '@xyflow/react';
-import type { AppNodeData, AgentNodeData, ToolNodeData, VariableNodeData, BranchNodeData, NoteNodeData } from './types';
+import type { AppNodeData, AgentNodeData, ToolNodeData, VariableNodeData, BranchNodeData, NoteNodeData, LLMNodeData, CodeNodeData, AnswerNodeData, KnowledgeRetrievalNodeData, QuestionClassifierNodeData, AssignerNodeData, IfElseNodeData } from './types';
 import { findDuplicateOutputVars, resolveTemplateVars, getUpstreamVars } from './validation';
 
 // ============================================================
@@ -128,6 +128,14 @@ export function PropertiesPanel({ node, edge, nodes, edges, onUpdateNode, onUpda
             <PurposeField node={node} data={data} onUpdate={onUpdateNode} />
           </>
         )}
+        {/* Dify 节点 */}
+        {data.nodeType === 'llm' && <LLMPanel node={node} data={data} onUpdate={onUpdateNode} nodes={nodes} edges={edges} />}
+        {data.nodeType === 'code' && <CodePanel node={node} data={data} onUpdate={onUpdateNode} />}
+        {data.nodeType === 'answer' && <AnswerPanel node={node} data={data} onUpdate={onUpdateNode} />}
+        {data.nodeType === 'knowledge-retrieval' && <KnowledgePanel node={node} data={data} onUpdate={onUpdateNode} />}
+        {data.nodeType === 'question-classifier' && <ClassifierPanel node={node} data={data} onUpdate={onUpdateNode} />}
+        {data.nodeType === 'assigner' && <AssignerPanel node={node} data={data} onUpdate={onUpdateNode} />}
+        {data.nodeType === 'if-else' && <IfElsePanel node={node} data={data} onUpdate={onUpdateNode} />}
       </div>
 
       {data.nodeType !== 'start' && (
@@ -449,6 +457,211 @@ function NotePanel({ node, data, onUpdate }: { node: Node; data: NoteNodeData; o
               }} />
           ))}
         </div>
+      </FormField>
+    </>
+  );
+}
+
+// ============================================================
+// Dify 节点属性面板
+// ============================================================
+
+// ---- LLM ----
+function LLMPanel({ node, data, onUpdate, nodes, edges }: {
+  node: Node; data: LLMNodeData;
+  onUpdate: (id: string, data: Partial<AppNodeData>) => void;
+  nodes: Node[]; edges: Edge[];
+}) {
+  return (
+    <>
+      <PurposeField node={node} data={data} onUpdate={onUpdate} />
+      <FormField label="模型名称">
+        <input style={inp} value={data.modelName || ''} placeholder="如 deepseek-chat"
+          onChange={(e) => onUpdate(node.id, { modelName: e.target.value, label: e.target.value || 'LLM' } as any)} />
+      </FormField>
+      <FormField label="模型提供商">
+        <input style={inp} value={data.modelProvider || ''} placeholder="如 langgenius/deepseek/deepseek"
+          onChange={(e) => onUpdate(node.id, { modelProvider: e.target.value } as any)} />
+      </FormField>
+      <FormField label="System Prompt">
+        <textarea style={{ ...txt, minHeight: 100 }} value={data.systemPrompt || ''}
+          placeholder="系统提示词..."
+          onChange={(e) => onUpdate(node.id, { systemPrompt: e.target.value } as any)} />
+      </FormField>
+      <FormField label="User Prompt">
+        <textarea style={{ ...txt, minHeight: 80 }} value={data.userPrompt || ''}
+          placeholder="用户提示词..."
+          onChange={(e) => onUpdate(node.id, { userPrompt: e.target.value } as any)} />
+      </FormField>
+      <FormField label="记忆窗口大小">
+        <input style={inp} type="number" value={data.memoryWindow || 0} placeholder="0=不启用"
+          onChange={(e) => onUpdate(node.id, { memoryWindow: parseInt(e.target.value) || 0 } as any)} />
+      </FormField>
+      <FormField label="输出变量名">
+        <input style={inp} value={data.outputVar || ''} placeholder="如 llm_output"
+          onChange={(e) => onUpdate(node.id, { outputVar: e.target.value } as any)} />
+      </FormField>
+    </>
+  );
+}
+
+// ---- Code ----
+function CodePanel({ node, data, onUpdate }: {
+  node: Node; data: CodeNodeData;
+  onUpdate: (id: string, data: Partial<AppNodeData>) => void;
+}) {
+  return (
+    <>
+      <PurposeField node={node} data={data} onUpdate={onUpdate} />
+      <FormField label="代码">
+        <textarea style={{ ...txt, minHeight: 200, fontFamily: 'Consolas, Monaco, monospace', fontSize: 11 }}
+          value={data.code || ''}
+          placeholder="Python 代码..."
+          onChange={(e) => onUpdate(node.id, { code: e.target.value } as any)} />
+      </FormField>
+      <FormField label="输入变量 (JSON)">
+        <textarea style={{ ...txt, minHeight: 60 }} value={data.inputVars || ''}
+          placeholder='[{"variable": "q", "valueSelector": "sys.query"}]'
+          onChange={(e) => onUpdate(node.id, { inputVars: e.target.value } as any)} />
+      </FormField>
+      <FormField label="输出定义 (JSON)">
+        <textarea style={{ ...txt, minHeight: 60 }} value={data.outputs || ''}
+          placeholder='{"result": {"type": "string"}}'
+          onChange={(e) => onUpdate(node.id, { outputs: e.target.value } as any)} />
+      </FormField>
+    </>
+  );
+}
+
+// ---- Answer ----
+function AnswerPanel({ node, data, onUpdate }: {
+  node: Node; data: AnswerNodeData;
+  onUpdate: (id: string, data: Partial<AppNodeData>) => void;
+}) {
+  return (
+    <>
+      <PurposeField node={node} data={data} onUpdate={onUpdate} />
+      <FormField label="回复文本">
+        <textarea style={{ ...txt, minHeight: 120 }} value={data.answerText || ''}
+          placeholder="回复内容..."
+          onChange={(e) => onUpdate(node.id, { answerText: e.target.value } as any)} />
+      </FormField>
+    </>
+  );
+}
+
+// ---- Knowledge Retrieval ----
+function KnowledgePanel({ node, data, onUpdate }: {
+  node: Node; data: KnowledgeRetrievalNodeData;
+  onUpdate: (id: string, data: Partial<AppNodeData>) => void;
+}) {
+  return (
+    <>
+      <PurposeField node={node} data={data} onUpdate={onUpdate} />
+      <FormField label="知识库 ID">
+        <input style={inp} value={data.datasetIds || ''} placeholder="逗号分隔的 dataset ID"
+          onChange={(e) => onUpdate(node.id, { datasetIds: e.target.value } as any)} />
+      </FormField>
+      <FormField label="查询变量">
+        <input style={inp} value={data.queryVar || ''} placeholder="如 1764500001018.query"
+          onChange={(e) => onUpdate(node.id, { queryVar: e.target.value } as any)} />
+      </FormField>
+      <FormField label="检索模式">
+        <select style={sel} value={data.retrievalMode || 'multiple'}
+          onChange={(e) => onUpdate(node.id, { retrievalMode: e.target.value } as any)}>
+          <option value="multiple">多路检索</option>
+          <option value="single">单路检索</option>
+        </select>
+      </FormField>
+      <FormField label="Top K">
+        <input style={inp} type="number" value={data.topK || 3}
+          onChange={(e) => onUpdate(node.id, { topK: parseInt(e.target.value) || 3 } as any)} />
+      </FormField>
+      <FormField label="重排序模型">
+        <input style={inp} value={data.rerankingModel || ''} placeholder="如 BAAI/bge-reranker-v2-m3"
+          onChange={(e) => onUpdate(node.id, { rerankingModel: e.target.value } as any)} />
+      </FormField>
+      <FormField label="启用重排序">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
+          <input type="checkbox" checked={data.rerankingEnable || false}
+            onChange={(e) => onUpdate(node.id, { rerankingEnable: e.target.checked } as any)} />
+          启用
+        </label>
+      </FormField>
+      <FormField label="分数阈值">
+        <input style={inp} value={data.scoreThreshold || ''} placeholder="留空=不限制"
+          onChange={(e) => onUpdate(node.id, { scoreThreshold: e.target.value } as any)} />
+      </FormField>
+      <FormField label="输出变量名">
+        <input style={inp} value={data.outputVar || ''} placeholder="如 kb_result"
+          onChange={(e) => onUpdate(node.id, { outputVar: e.target.value } as any)} />
+      </FormField>
+    </>
+  );
+}
+
+// ---- Question Classifier ----
+function ClassifierPanel({ node, data, onUpdate }: {
+  node: Node; data: QuestionClassifierNodeData;
+  onUpdate: (id: string, data: Partial<AppNodeData>) => void;
+}) {
+  return (
+    <>
+      <PurposeField node={node} data={data} onUpdate={onUpdate} />
+      <FormField label="分类定义 (JSON)">
+        <textarea style={{ ...txt, minHeight: 80 }} value={data.classes || ''}
+          placeholder='[{"id": "a", "name": "分类A"}, {"id": "b", "name": "分类B"}]'
+          onChange={(e) => onUpdate(node.id, { classes: e.target.value } as any)} />
+      </FormField>
+      <FormField label="分类指令">
+        <textarea style={{ ...txt, minHeight: 100 }} value={data.instructions || ''}
+          placeholder="分类指令..."
+          onChange={(e) => onUpdate(node.id, { instructions: e.target.value } as any)} />
+      </FormField>
+      <FormField label="模型名称">
+        <input style={inp} value={data.modelName || ''} placeholder="如 deepseek-chat"
+          onChange={(e) => onUpdate(node.id, { modelName: e.target.value } as any)} />
+      </FormField>
+      <FormField label="启用记忆">
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
+          <input type="checkbox" checked={data.memoryEnabled || false}
+            onChange={(e) => onUpdate(node.id, { memoryEnabled: e.target.checked } as any)} />
+          启用
+        </label>
+      </FormField>
+    </>
+  );
+}
+
+// ---- Assigner ----
+function AssignerPanel({ node, data, onUpdate }: {
+  node: Node; data: AssignerNodeData;
+  onUpdate: (id: string, data: Partial<AppNodeData>) => void;
+}) {
+  return (
+    <>
+      <PurposeField node={node} data={data} onUpdate={onUpdate} />
+      <FormField label="赋值项 (JSON)">
+        <textarea style={{ ...txt, minHeight: 100 }} value={data.items || ''}
+          placeholder='[{"inputType": "variable", "operation": "over-write", "value": "nodeId.field", "variableSelector": "conversation.varName"}]'
+          onChange={(e) => onUpdate(node.id, { items: e.target.value } as any)} />
+      </FormField>
+    </>
+  );
+}
+
+// ---- If-Else ----
+function IfElsePanel({ node, data, onUpdate }: {
+  node: Node; data: IfElseNodeData;
+  onUpdate: (id: string, data: Partial<AppNodeData>) => void;
+}) {
+  return (
+    <>
+      <PurposeField node={node} data={data} onUpdate={onUpdate} />
+      <FormField label="条件分支 (JSON)">
+        <textarea style={{ ...txt, minHeight: 120 }} value={data.cases || ''}
+          placeholder='[{"caseId": "true", "conditions": [{"comparisonOperator": "contains", "value": "关键词", "varType": "string", "variableSelector": "sys.query"}], "logicalOperator": "or"}]'
+          onChange={(e) => onUpdate(node.id, { cases: e.target.value } as any)} />
       </FormField>
     </>
   );

@@ -1,5 +1,6 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { AppNodeData, DesignDoc, DesignDocNode, DesignDocEdge } from './types';
+import { load as yamlLoad } from 'js-yaml';
 
 /**
  * 将 React Flow 的 nodes + edges 导出为自描述 DesignDoc 格式。
@@ -68,6 +69,77 @@ export function exportToDesignDoc(
       case 'start':
         docNodes.push({ ...base });
         break;
+      // ---- Dify 节点 ----
+      case 'llm':
+        docNodes.push({
+          ...base,
+          modelName: data.modelName || '',
+          modelProvider: data.modelProvider || '',
+          completionParams: data.completionParams || '',
+          systemPrompt: data.systemPrompt || '',
+          userPrompt: data.userPrompt || '',
+          contextVar: data.contextVar || '',
+          memoryWindow: data.memoryWindow || 0,
+          outputVar: data.outputVar || '',
+          parallelGroup: data.parallelGroup || '',
+        });
+        break;
+      case 'code':
+        docNodes.push({
+          ...base,
+          code: data.code || '',
+          inputVars: data.inputVars || '',
+          outputs: data.outputs || '',
+          parallelGroup: data.parallelGroup || '',
+        });
+        break;
+      case 'answer':
+        docNodes.push({
+          ...base,
+          answerText: data.answerText || '',
+          parallelGroup: data.parallelGroup || '',
+        });
+        break;
+      case 'knowledge-retrieval':
+        docNodes.push({
+          ...base,
+          datasetIds: data.datasetIds || '',
+          queryVar: data.queryVar || '',
+          retrievalMode: data.retrievalMode || 'multiple',
+          topK: data.topK || 3,
+          rerankingModel: data.rerankingModel || '',
+          rerankingEnable: data.rerankingEnable || false,
+          scoreThreshold: data.scoreThreshold || '',
+          outputVar: data.outputVar || '',
+          parallelGroup: data.parallelGroup || '',
+        });
+        break;
+      case 'question-classifier':
+        docNodes.push({
+          ...base,
+          classes: data.classes || '',
+          instructions: data.instructions || '',
+          queryVar: data.queryVar || '',
+          modelName: data.modelName || '',
+          modelProvider: data.modelProvider || '',
+          memoryEnabled: data.memoryEnabled || false,
+          parallelGroup: data.parallelGroup || '',
+        });
+        break;
+      case 'assigner':
+        docNodes.push({
+          ...base,
+          items: data.items || '',
+          parallelGroup: data.parallelGroup || '',
+        });
+        break;
+      case 'if-else':
+        docNodes.push({
+          ...base,
+          cases: data.cases || '',
+          parallelGroup: data.parallelGroup || '',
+        });
+        break;
     }
   }
 
@@ -77,6 +149,7 @@ export function exportToDesignDoc(
       from: edge.source,
       to: edge.target,
       condition: typeof edge.label === 'string' && edge.label ? edge.label : undefined,
+      sourceHandle: (edge as any).sourceHandle || undefined,
     });
   }
 
@@ -85,7 +158,7 @@ export function exportToDesignDoc(
   const summaryOutputs = getSummaryOutputs(docNodes, docEdges);
 
   return {
-    _schema: 'workflow-design-doc/v1',
+    _schema: 'workflow-design-doc/v2',
     name: name || '未命名工作流',
     description: description || '',
     purpose: purpose || '',
@@ -151,6 +224,61 @@ export function importFromDesignDoc(
           content: dn.content || '', color: dn.color || 'yellow',
         };
         break;
+      // ---- Dify 节点 ----
+      case 'llm':
+        data = {
+          nodeType: 'llm', label: dn.label || 'LLM', purpose: dn.purpose || '',
+          modelName: dn.modelName || '', modelProvider: dn.modelProvider || '',
+          completionParams: dn.completionParams || '',
+          systemPrompt: dn.systemPrompt || '', userPrompt: dn.userPrompt || '',
+          contextVar: dn.contextVar || '', memoryWindow: dn.memoryWindow || 0,
+          outputVar: dn.outputVar || '', parallelGroup: dn.parallelGroup || '',
+        };
+        break;
+      case 'code':
+        data = {
+          nodeType: 'code', label: dn.label || '代码', purpose: dn.purpose || '',
+          code: dn.code || '', inputVars: dn.inputVars || '',
+          outputs: dn.outputs || '', parallelGroup: dn.parallelGroup || '',
+        };
+        break;
+      case 'answer':
+        data = {
+          nodeType: 'answer', label: dn.label || '回复', purpose: dn.purpose || '',
+          answerText: dn.answerText || '', parallelGroup: dn.parallelGroup || '',
+        };
+        break;
+      case 'knowledge-retrieval':
+        data = {
+          nodeType: 'knowledge-retrieval', label: dn.label || '知识检索', purpose: dn.purpose || '',
+          datasetIds: dn.datasetIds || '', queryVar: dn.queryVar || '',
+          retrievalMode: dn.retrievalMode || 'multiple', topK: dn.topK || 3,
+          rerankingModel: dn.rerankingModel || '', rerankingEnable: dn.rerankingEnable || false,
+          scoreThreshold: dn.scoreThreshold || '',
+          outputVar: dn.outputVar || '', parallelGroup: dn.parallelGroup || '',
+        };
+        break;
+      case 'question-classifier':
+        data = {
+          nodeType: 'question-classifier', label: dn.label || '问题分类器', purpose: dn.purpose || '',
+          classes: dn.classes || '', instructions: dn.instructions || '',
+          queryVar: dn.queryVar || '', modelName: dn.modelName || '',
+          modelProvider: dn.modelProvider || '', memoryEnabled: dn.memoryEnabled || false,
+          parallelGroup: dn.parallelGroup || '',
+        };
+        break;
+      case 'assigner':
+        data = {
+          nodeType: 'assigner', label: dn.label || '变量赋值', purpose: dn.purpose || '',
+          items: dn.items || '', parallelGroup: dn.parallelGroup || '',
+        };
+        break;
+      case 'if-else':
+        data = {
+          nodeType: 'if-else', label: dn.label || '条件分支', purpose: dn.purpose || '',
+          cases: dn.cases || '', parallelGroup: dn.parallelGroup || '',
+        };
+        break;
       default:
         data = { nodeType: 'start', label: '未识别', purpose: '' };
     }
@@ -169,10 +297,254 @@ export function importFromDesignDoc(
       source: de.from,
       target: de.to,
       label: de.condition || de.label || '',
-    });
+    } as Edge);
   }
 
   return { nodes, edges };
+}
+
+// ============================================================
+// Dify DSL YAML 导入
+// ============================================================
+
+/** 安全将 Dify 的选择器（可能是数组或字符串）转为点分隔字符串 */
+function selectorToStr(v: unknown): string {
+  if (Array.isArray(v)) return v.join('.');
+  if (typeof v === 'string') return v;
+  return '';
+}
+
+/**
+ * 解析 Dify 导出的 YAML/DSL 文件，返回 React Flow 节点和边
+ */
+export function importFromDifyYaml(yamlText: string): {
+  nodes: Node[];
+  edges: Edge[];
+  workflowName: string;
+  workflowDesc: string;
+  workflowPurpose: string;
+  workflowTags: string[];
+} {
+  const doc = yamlLoad(yamlText) as any;
+
+  const app = doc.app || {};
+  const workflow = doc.workflow || {};
+  const graph = workflow.graph || {};
+  const rawNodes: any[] = graph.nodes || [];
+  const rawEdges: any[] = graph.edges || [];
+
+  const workflowName = app.name || '';
+  const workflowDesc = app.description || '';
+  const workflowPurpose = '';
+  const workflowTags: string[] = [];
+
+  const nodes: Node[] = [];
+  const edges: Edge[] = [];
+
+  // 1. 转换节点
+  for (const rn of rawNodes) {
+    const data = rn.data || {};
+    const nodeType = data.type as string;
+    const id = rn.id as string;
+    const title = data.title || '';
+    const desc = data.desc || '';
+
+    // Dify 坐标
+    const pos = rn.position || { x: 0, y: 0 };
+
+    let nodeData: Record<string, unknown>;
+
+    switch (nodeType) {
+      case 'start':
+        nodeData = {
+          nodeType: 'start',
+          label: title || '开始',
+          purpose: desc || '',
+        };
+        break;
+
+      case 'llm': {
+        const model = data.model || {};
+        const promptTemplates: any[] = data.prompt_template || [];
+        const systemPrompt = promptTemplates.find((p: any) => p.role === 'system')?.text || '';
+        const userPrompt = promptTemplates.find((p: any) => p.role === 'user')?.text || '';
+        const contextVar = selectorToStr(data.context?.variable_selector);
+        const memoryWindow = data.memory?.window?.size || 0;
+
+        nodeData = {
+          nodeType: 'llm',
+          label: title || 'LLM',
+          purpose: desc || '',
+          modelName: model.name || '',
+          modelProvider: model.provider || '',
+          completionParams: JSON.stringify(model.completion_params || {}, null, 2),
+          systemPrompt,
+          userPrompt,
+          contextVar,
+          memoryWindow,
+          outputVar: '',
+          parallelGroup: '',
+        };
+        break;
+      }
+
+      case 'code': {
+        const codeText = data.code || '';
+        const variables: any[] = data.variables || [];
+        const outputDefs = data.outputs || {};
+
+        nodeData = {
+          nodeType: 'code',
+          label: title || '代码',
+          purpose: desc || '',
+          code: codeText,
+          inputVars: JSON.stringify(variables.map((v: any) => ({
+            variable: v.variable,
+            valueSelector: selectorToStr(v.value_selector),
+          })), null, 2),
+          outputs: JSON.stringify(outputDefs, null, 2),
+          parallelGroup: '',
+        };
+        break;
+      }
+
+      case 'answer': {
+        nodeData = {
+          nodeType: 'answer',
+          label: title || '回复',
+          purpose: desc || '',
+          answerText: data.answer || '',
+          parallelGroup: '',
+        };
+        break;
+      }
+
+      case 'knowledge-retrieval': {
+        const datasetIds = (data.dataset_ids || []).join(', ');
+        const queryVar = selectorToStr(data.query_variable_selector);
+        const retrievalMode = data.retrieval_mode || 'multiple';
+        const topK = data.multiple_retrieval_config?.top_k || 3;
+        const rerankingModel = data.multiple_retrieval_config?.reranking_model?.model || '';
+        const rerankingEnable = data.multiple_retrieval_config?.reranking_enable || false;
+        const scoreThreshold = data.multiple_retrieval_config?.score_threshold;
+
+        nodeData = {
+          nodeType: 'knowledge-retrieval',
+          label: title || '知识检索',
+          purpose: desc || '',
+          datasetIds,
+          queryVar,
+          retrievalMode,
+          topK,
+          rerankingModel,
+          rerankingEnable,
+          scoreThreshold: scoreThreshold != null ? String(scoreThreshold) : '',
+          outputVar: '',
+          parallelGroup: '',
+        };
+        break;
+      }
+
+      case 'question-classifier': {
+        const classes = (data.classes || []).map((c: any) => ({
+          id: c.id,
+          name: c.name,
+        }));
+
+        nodeData = {
+          nodeType: 'question-classifier',
+          label: title || '问题分类器',
+          purpose: desc || '',
+          classes: JSON.stringify(classes, null, 2),
+          instructions: data.instructions || '',
+          queryVar: selectorToStr(data.query_variable_selector) || 'sys.query',
+          modelName: data.model?.name || '',
+          modelProvider: data.model?.provider || '',
+          memoryEnabled: data.memory?.enabled || false,
+          parallelGroup: '',
+        };
+        break;
+      }
+
+      case 'assigner': {
+        const items = (data.items || []).map((item: any) => ({
+          inputType: item.input_type,
+          operation: item.operation,
+          value: selectorToStr(item.value),
+          variableSelector: selectorToStr(item.variable_selector),
+        }));
+
+        nodeData = {
+          nodeType: 'assigner',
+          label: title || '变量赋值',
+          purpose: desc || '',
+          items: JSON.stringify(items, null, 2),
+          parallelGroup: '',
+        };
+        break;
+      }
+
+      case 'if-else': {
+        const cases = (data.cases || []).map((c: any) => ({
+          caseId: c.case_id,
+          conditions: (c.conditions || []).map((cond: any) => ({
+            comparisonOperator: cond.comparison_operator,
+            value: cond.value,
+            varType: cond.varType,
+            variableSelector: selectorToStr(cond.variable_selector),
+          })),
+          logicalOperator: c.logical_operator || 'or',
+        }));
+
+        nodeData = {
+          nodeType: 'if-else',
+          label: title || '条件分支',
+          purpose: desc || '',
+          cases: JSON.stringify(cases, null, 2),
+          parallelGroup: '',
+        };
+        break;
+      }
+
+      default: {
+        // 未知类型，跳过
+        continue;
+      }
+    }
+
+    nodes.push({
+      id,
+      type: nodeType,
+      position: { x: pos.x, y: pos.y },
+      data: nodeData,
+    });
+  }
+
+  // 2. 转换边
+  // 注意：Dify 的 sourceHandle（如 "true"/"false"/"price"）与我们的节点 handle ID 不匹配，
+  // 因此不设置 sourceHandle，只保留 label 用于显示分支条件
+  for (const re of rawEdges) {
+    edges.push({
+      id: re.id || `e_${re.source}_${re.target}`,
+      source: re.source,
+      target: re.target,
+      label: re.sourceHandle || undefined,
+    } as Edge);
+  }
+
+  return { nodes, edges, workflowName, workflowDesc, workflowPurpose, workflowTags };
+}
+
+/**
+ * 判断文件内容是否为 Dify DSL YAML 格式
+ */
+export function isDifyYaml(text: string): boolean {
+  try {
+    const doc = yamlLoad(text) as any;
+    return !!(doc && doc.kind === 'app' && doc.workflow?.graph);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -240,6 +612,16 @@ export function exportToMarkdown(doc: DesignDoc): string {
     if (node.toolParams) lines.push(`- **参数:** \`${node.toolParams}\``);
     if (node.varName) lines.push(`- **变量:** \`{{${node.varName}}}\``);
     if (node.content) lines.push(`- **内容:** ${node.content}`);
+    // Dify 节点详情
+    if (node.modelName) lines.push(`- **模型:** ${node.modelName}`);
+    if (node.systemPrompt) lines.push(`- **System Prompt:** \`${node.systemPrompt.slice(0, 200)}...\``);
+    if (node.code) lines.push(`- **代码:** \`\`\`python\n${node.code.slice(0, 500)}\n\`\`\``);
+    if (node.answerText) lines.push(`- **回复:** ${node.answerText.slice(0, 200)}`);
+    if (node.datasetIds) lines.push(`- **知识库:** ${node.datasetIds}`);
+    if (node.classes) lines.push(`- **分类:** ${node.classes}`);
+    if (node.instructions) lines.push(`- **指令:** ${node.instructions.slice(0, 300)}`);
+    if (node.items) lines.push(`- **赋值项:** ${node.items}`);
+    if (node.cases) lines.push(`- **条件:** ${node.cases}`);
     lines.push('');
   }
 
@@ -295,20 +677,34 @@ export function exportToAIPrompt(doc: DesignDoc): string {
     if (node.purpose) lines.push(`${prefix}    - 用途: ${node.purpose}`);
     if (node.agentName) lines.push(`${prefix}    - Agent: ${node.agentName}`);
     if (node.toolName) lines.push(`${prefix}    - 工具: ${node.toolName}`);
+    if (node.modelName) lines.push(`${prefix}    - 模型: ${node.modelName}`);
     if (node.inputTemplate) lines.push(`${prefix}    - 输入模板: ${node.inputTemplate}`);
     if (node.toolParams) lines.push(`${prefix}    - 参数模板: ${node.toolParams}`);
     if (node.outputVar) lines.push(`${prefix}    - 输出变量: \`{{${node.outputVar}}}\``);
     if (node.branchInputVar) lines.push(`${prefix}    - 分支依据: \`{{${node.branchInputVar}}}\``);
     if (node.parallelGroup) lines.push(`${prefix}    - 并行组: ${node.parallelGroup}`);
+    if (node.code) lines.push(`${prefix}    - 代码: (Python 代码块)`);
+    if (node.answerText) lines.push(`${prefix}    - 回复: ${node.answerText.slice(0, 150)}`);
+    if (node.datasetIds) lines.push(`${prefix}    - 知识库: ${node.datasetIds}`);
+    if (node.classes) {
+      try {
+        const cls = JSON.parse(node.classes);
+        lines.push(`${prefix}    - 分类: ${cls.map((c: any) => c.name).join(', ')}`);
+      } catch {
+        lines.push(`${prefix}    - 分类: ${node.classes}`);
+      }
+    }
+    if (node.cases) lines.push(`${prefix}    - 条件: (见 JSON)`);
+    if (node.items) lines.push(`${prefix}    - 赋值: (见 JSON)`);
 
-    if (node.type === 'branch') {
+    if (node.type === 'branch' || node.type === 'if-else' || node.type === 'question-classifier') {
       const outEdges = doc.edges.filter((e) => e.from === nodeId);
       if (outEdges.length > 0) {
         lines.push(`${prefix}    - 分支规则:`);
         for (const edge of outEdges) {
           const target = doc.nodes.find((n) => n.id === edge.to);
-          const cond = edge.condition || 'default';
-          lines.push(`${prefix}      · 当 \`{{${node.branchInputVar || '?'}}}\` 为 "${cond}" → 流向「${target?.label || edge.to}」`);
+          const cond = edge.condition || edge.sourceHandle || 'default';
+          lines.push(`${prefix}      · 当 \`${cond}\` → 流向「${target?.label || edge.to}」`);
         }
         // 每个分支的下游独立描述（下一层级缩进）
         for (const edge of outEdges) {
@@ -426,11 +822,18 @@ function typeLabel(type: string): string {
     case 'tool': return '工具调用';
     case 'branch': return '条件分支';
     case 'variable': return '变量声明';
+    case 'llm': return 'LLM 调用';
+    case 'code': return '代码执行';
+    case 'answer': return '回复输出';
+    case 'knowledge-retrieval': return '知识检索';
+    case 'question-classifier': return '问题分类';
+    case 'assigner': return '变量赋值';
+    case 'if-else': return '条件分支';
     default: return type;
   }
 }
 
-function nodeTypeIcon(type: string): string {
+export function nodeTypeIcon(type: string): string {
   switch (type) {
     case 'start': return '▶';
     case 'agent': return '🤖';
@@ -438,6 +841,13 @@ function nodeTypeIcon(type: string): string {
     case 'variable': return '📦';
     case 'branch': return '🔀';
     case 'note': return '📝';
+    case 'llm': return '🧠';
+    case 'code': return '🐍';
+    case 'answer': return '💬';
+    case 'knowledge-retrieval': return '📚';
+    case 'question-classifier': return '🏷️';
+    case 'assigner': return '📋';
+    case 'if-else': return '🔀';
     default: return '●';
   }
 }
