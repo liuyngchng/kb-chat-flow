@@ -2,10 +2,17 @@ package store
 
 import (
 	"fmt"
+	"time"
 	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+// adminPwdExpiry 内置 admin 初始密码有效期：启动后 2 小时内必须登录并修改密码
+const adminPwdExpiry = 2 * time.Hour
+
+// adminPwdExpiryText adminPwdExpiry 的中文显示文案
+const adminPwdExpiryText = "2 小时"
 
 // bcryptCost 计算成本，12 是当下推荐的安全值（约 300ms/次）
 const bcryptCost = 12
