@@ -184,16 +184,27 @@ public class SqliteMetaStore implements MetaStore {
     }
 
     private void seedUsers() {
-    try (Connection conn = ds.getConnection()) {
-        int count = queryInt(conn, "SELECT COUNT(*) FROM users");
-        if (count > 0) return;
+        try (Connection conn = ds.getConnection()) {
+            seedAdminIfMissing(conn);
+            seedApi0IfMissing(conn);
+        } catch (SQLException e) {
+            throw new RuntimeException("种子用户插入失败", e);
+        }
+    }
+
+    /**
+     * 当 users 表中不存在 admin 用户时，创建内置管理员。
+     * 随机密码打印到控制台和日志文件；登录后 2 小时内未修改则密码过期，需重置 cfg.db。
+     */
+    private void seedAdminIfMissing(Connection conn) throws SQLException {
+        if (existsUser(conn, "admin")) return;
 
         // 生成随机初始密码（12 位字母数字）
         String adminPwd = randomPassword(12);
         String pwdHash = PasswordEncoder.hashPassword(adminPwd);
 
-        // admin 密码 1 小时后过期，登录后强制修改
-        String expiresAt = LocalDateTime.now().plusHours(1).toString();
+        // admin 密码 2 小时后过期，登录后强制修改（修改密码会清除过期时间）
+        String expiresAt = LocalDateTime.now().plusHours(2).toString();
         String sqlAdmin = "INSERT INTO users (user_name, user_pwd, role, note, pwd_expires_at) VALUES (?, ?, ?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sqlAdmin)) {
             ps.setString(1, "admin");
@@ -204,7 +215,20 @@ public class SqliteMetaStore implements MetaStore {
             ps.executeUpdate();
         }
 
-        // 内置 API 调用用户
+        // 随机密码打印到控制台和日志文件
+        log.info("首次运行已创建管理员账号 user_name=admin initial_password={} expires_in=2h", adminPwd);
+        System.out.println("\n========================================");
+        System.out.println("  首次运行已创建管理员账号 admin");
+        System.out.println("  初始密码: " + adminPwd);
+        System.out.println("  该密码 2 小时内有效，登录后需立即修改密码");
+        System.out.println("  若忘记初始密码，请删除 cfg.db 并从 cfg.db.template 重置后重启");
+        System.out.println("========================================\n");
+    }
+
+    /** 当 users 表中不存在 api0 用户时，创建内置 API 调用用户 */
+    private void seedApi0IfMissing(Connection conn) throws SQLException {
+        if (existsUser(conn, "api0")) return;
+
         String apiPwdHash = PasswordEncoder.hashPassword("api0");
         String sqlApi = "INSERT INTO users (user_name, user_pwd, role, note) VALUES (?, ?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(sqlApi)) {
@@ -214,18 +238,17 @@ public class SqliteMetaStore implements MetaStore {
             ps.setString(4, "内置API调用用户");
             ps.executeUpdate();
         }
-
-        // 随机密码打印到控制台和日志文件
-        log.info("首次运行已创建管理员账号 user_name=admin initial_password={} expires_in=1h", adminPwd);
-        System.out.println("\n========================================");
-        System.out.println("  首次运行已创建管理员账号 admin");
-        System.out.println("  初始密码: " + adminPwd);
-        System.out.println("  该密码 1 小时内有效，登录后需立即修改密码");
-        System.out.println("========================================\n");
-    } catch (SQLException e) {
-        throw new RuntimeException("种子用户插入失败", e);
     }
-}
+
+    /** 判断指定用户名是否已存在 */
+    private boolean existsUser(Connection conn, String userName) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement("SELECT 1 FROM users WHERE user_name = ?")) {
+            ps.setString(1, userName);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
 
 /**
  * 生成指定长度的随机字母数字密码（crypto/rand，密码学安全）

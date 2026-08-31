@@ -249,6 +249,28 @@ public class Bootstrap {
         // -- Classifier test (shared) --
         router.addRoute("POST", "/api/classifier/test", chatController::testClassifier);
 
+        // ============================================================
+        // Open API — 第三方开放接口（URL t=token 认证，网关层统一处理）
+        // 与前端 /api/* 共用同一套核心 handler，仅入口与认证方式不同。
+        // 仅开放查询/问答类能力，管理类写操作不对外开放。
+        // ============================================================
+        if (isChat) {
+            router.addRoute("POST", "/open_api/chat", chatController::chat);
+            router.addRoute("POST", "/open_api/chat/sync", chatController::chatSync);
+            router.addRoute("GET", "/open_api/chat/history", chatController::history);
+            router.addRoute("POST", "/open_api/chat/clear", chatController::clear);
+        }
+        router.addRoute("POST", "/open_api/vdb/search", vdbController::search);
+        router.addRoute("GET", "/open_api/vdb", vdbController::myList);
+        router.addRoute("GET", "/open_api/vdb/pub", vdbController::pubList);
+        router.addRoute("POST", "/open_api/faq/match", faqController::match);
+        router.addRoute("GET", "/open_api/faq", faqController::list);
+        router.addRoute("GET", "/open_api/workflows", workflowController::listPublic);
+        router.addRoute("GET", "/open_api/workflows/:id", workflowController::get);
+        router.addRoute("GET", "/open_api/ai-agents", agentController::list);
+        router.addRoute("GET", "/open_api/ai-agents/:id", agentController::get);
+        router.addRoute("GET", "/open_api/agents", authController::getOnlineAgents);
+
         // 12. Start HTTP server
         HttpServer server = new HttpServer(cfg.getServer().getPort(), router, cfg);
         server.start();

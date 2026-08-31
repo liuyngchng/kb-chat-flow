@@ -38,6 +38,10 @@ public class HttpServer {
     // ThreadLocal for path parameters per request
     private static final ThreadLocal<Map<String, String>> PATH_PARAMS = ThreadLocal.withInitial(ConcurrentHashMap::new);
 
+    // ThreadLocal for the current request, so response helpers can emit Set-Cookie
+    // (AuthController sets X-Set-Cookie on the request; response layer converts it).
+    private static final ThreadLocal<FullHttpRequest> CURRENT_REQUEST = new ThreadLocal<>();
+
     // Security response headers
     private static final Map<String, String> SECURITY_HEADERS = Map.of(
             "Strict-Transport-Security", "max-age=31536000; includeSubDomains",
@@ -103,12 +107,14 @@ public class HttpServer {
 
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
+            CURRENT_REQUEST.set(request);
             String path = sanitizePath(request.uri());
             String method = request.method().name();
 
             // Static files
             if (path.startsWith("/static/")) {
                 serveStatic(ctx, path);
+                CURRENT_REQUEST.remove();
                 return;
             }
 
@@ -121,9 +127,13 @@ public class HttpServer {
                 try {
                     // Apply auth middleware based on path
                     if (requiresAuth(path)) {
-                        User user = authenticateRequest(request);
+                        User user = authenticateByScheme(path, request);
                         if (user == null) {
-                            sendJson(ctx, 401, "{\"error\":\"未提供有效认证 token\"}");
+                            if (path.startsWith("/open_api/")) {
+                                sendJson(ctx, 401, "{\"error\":\"缺少或无效的 t 参数(token)\"}");
+                            } else {
+                                sendJson(ctx, 401, "{\"error\":\"未提供有效认证 token\"}");
+                            }
                             return;
                         }
                         // Check admin-only paths
@@ -139,8 +149,10 @@ public class HttpServer {
                     sendError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "内部服务器错误");
                 } finally {
                     PATH_PARAMS.remove();
+                    CURRENT_REQUEST.remove();
                 }
             } else {
+                CURRENT_REQUEST.remove();
                 sendError(ctx, HttpResponseStatus.NOT_FOUND, "404 Not Found");
             }
         }
@@ -152,13 +164,28 @@ public class HttpServer {
         }
 
         private boolean requiresAuth(String path) {
-            // If API auth is disabled globally, skip token check
+            // /open_api/* is always authenticated (third-party API, URL t=token), independent of api_auth switch
+            if (path.startsWith("/open_api/")) return true;
+            // If API auth is disabled globally, skip token check for frontend API
             if (!config.getSys().isApiAuth()) return false;
             // Only API routes need token authentication
             if (!path.startsWith("/api/")) return false;
             // Login API is public
             if (path.equals("/api/login")) return false;
             return true;
+        }
+
+        /**
+         * 按路径选择认证方案：
+         *  - /open_api/*（第三方）: 仅接受 URL t=token 参数
+         *  - 其他 /api/*（前端）:  httpOnly Cookie（兼容 Bearer / URL t 兜底）
+         */
+        private User authenticateByScheme(String path, FullHttpRequest request) {
+            if (path.startsWith("/open_api/")) {
+                String tokenStr = getQueryParam(request, "t");
+                return tokenStr != null ? TokenProvider.parseToken(tokenStr) : null;
+            }
+            return authenticateRequest(request);
         }
 
         private boolean isAdminPath(String path, String method) {
@@ -194,6 +221,7 @@ public class HttpServer {
         private User authenticateRequest(FullHttpRequest request) {
             String tokenStr = TokenProvider.extractToken(
                     request.headers().get(HttpHeaderNames.AUTHORIZATION),
+                    request.headers().get(HttpHeaderNames.COOKIE),
                     getQueryParam(request, "t")
             );
             if (tokenStr == null) return null;
@@ -251,6 +279,7 @@ public class HttpServer {
                 HttpVersion.HTTP_1_1, HttpResponseStatus.FOUND);
         response.headers().set(HttpHeaderNames.LOCATION, location);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
+        applySetCookie(response);
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
     }
 
@@ -263,6 +292,7 @@ public class HttpServer {
                 .set(HttpHeaderNames.CONTENT_TYPE, "application/json; charset=utf-8")
                 .set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
         applySecurityHeaders(response);
+        applySetCookie(response);
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
     }
 
@@ -274,7 +304,21 @@ public class HttpServer {
                 .set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=utf-8")
                 .set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
         applySecurityHeaders(response);
+        applySetCookie(response);
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    /**
+     * 将当前请求上由 AuthController 设置的 X-Set-Cookie 头转为标准 Set-Cookie 响应头。
+     * X-Set-Cookie 机制让登录/注销逻辑无需直接访问响应对象即可下发 Cookie。
+     */
+    private static void applySetCookie(FullHttpResponse response) {
+        FullHttpRequest request = CURRENT_REQUEST.get();
+        if (request == null) return;
+        String setCookie = request.headers().get("X-Set-Cookie");
+        if (setCookie != null && !setCookie.isEmpty()) {
+            response.headers().set(HttpHeaderNames.SET_COOKIE, setCookie);
+        }
     }
 
     private static void applySecurityHeaders(FullHttpResponse response) {

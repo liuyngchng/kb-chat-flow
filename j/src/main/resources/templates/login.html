@@ -86,7 +86,6 @@
                 });
                 const data = await resp.json();
                 if (data.status === 'ok') {
-                    localStorage.setItem('token', data.token);
                     if (data.must_change_pwd) {
                         // 弹出强制改密码
                         document.getElementById('forceNewPwd').value = '';
@@ -94,7 +93,8 @@
                         document.getElementById('forcePwdError').style.display = 'none';
                         document.getElementById('forcePwdModal').style.display = 'flex';
                     } else {
-                        window.location.href = '/?t=' + encodeURIComponent(data.token);
+                        // 认证走 httpOnly Cookie，无需手动携带 token
+                        window.location.href = '/';
                     }
                 } else {
                     errorMsg.textContent = data.error || '登录失败';
@@ -132,7 +132,7 @@
                 });
                 const data = await resp.json();
                 if (data.status === 'ok') {
-                    window.location.href = '/?t=' + encodeURIComponent(localStorage.getItem('token'));
+                    window.location.href = '/';
                 } else {
                     errDiv.textContent = data.error || '修改失败';
                     errDiv.style.display = 'block';

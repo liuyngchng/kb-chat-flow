@@ -136,15 +136,6 @@
     </div>
 
     <input type="hidden" id="uid" name="uid" value="{{uid}}">
-    <script>
-        (function() {
-            var params = new URLSearchParams(window.location.search);
-            var t = params.get('t');
-            if (t) {
-                localStorage.setItem('token', t);
-            }
-        })();
-    </script>
     <script src="/static/js/vdb.js?v=3"></script>
 </body>
 </html>

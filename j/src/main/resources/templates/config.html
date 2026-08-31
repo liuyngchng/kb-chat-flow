@@ -229,39 +229,6 @@
             gap: 12px;
         }
 
-        .cfg-btn {
-            padding: 11px 28px;
-            border: none;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .cfg-btn-save {
-            background: linear-gradient(135deg, #4b6cb7, #3a5a9e);
-            color: white;
-        }
-
-        .cfg-btn-save:hover {
-            background: linear-gradient(135deg, #3a5a9e, #2c487e);
-            box-shadow: 0 4px 12px rgba(75, 108, 183, 0.3);
-            transform: translateY(-1px);
-        }
-
-        .cfg-btn-reset {
-            background: #f0f0f0;
-            color: #555;
-        }
-
-        .cfg-btn-reset:hover {
-            background: #e0e0e0;
-        }
-
         .cfg-toast {
             position: fixed;
             top: 20px;
@@ -464,11 +431,16 @@
         <div class="cfg-layout">
             <!-- 左侧导航 -->
             <nav class="cfg-sidebar">
-                <div class="cfg-tab active" data-tab="kbmgmt">
+                <div class="cfg-tab" data-tab="kbmgmt">
                     <i class="fas fa-database"></i> 知识库
+                    <i class="fas fa-external-link-alt" style="margin-left:auto;font-size:0.7rem;color:#aaa;"></i>
+                </div>
+                <div class="cfg-tab" data-tab="vdb-bind">
+                    <i class="fas fa-link"></i> 知识库绑定
+                    <i class="fas fa-external-link-alt" style="margin-left:auto;font-size:0.7rem;color:#aaa;"></i>
                 </div>
                 <div class="cfg-sidebar-divider"></div>
-                <div class="cfg-tab" data-tab="kb">
+                <div class="cfg-tab active" data-tab="kb">
                     <i class="fas fa-book"></i> 文本处理
                 </div>
                 <div class="cfg-tab" data-tab="llm">
@@ -504,23 +476,8 @@
 
             <!-- 右侧内容区 -->
             <div class="cfg-content">
-                <!-- 知识库（iframe 嵌入） -->
-                <div class="cfg-section active" id="section-kbmgmt">
-                    <div class="cfg-iframe-wrap">
-                        <div class="cfg-iframe-header">
-                            <i class="fas fa-database"></i> 知识库
-                            <a href="/vdb/idx?t={{token}}" target="_blank">
-                                <i class="fas fa-external-link-alt"></i> 新窗口打开
-                            </a>
-                        </div>
-                        <iframe class="cfg-iframe" id="kbmgmtIframe"
-                                src="/vdb/idx?t={{token}}">
-                        </iframe>
-                    </div>
-                </div>
-
                 <!-- 文本处理 -->
-                <div class="cfg-section" id="section-kb">
+                <div class="cfg-section active" id="section-kb">
                     <h2><i class="fas fa-book"></i> 文本处理</h2>
 
                     <h3 style="font-size:1rem;color:#4b6cb7;margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid #eef1f6;">
@@ -1083,26 +1040,11 @@
     <div id="cfgToast" class="cfg-toast"></div>
 
     <script>
-        // 从 URL 参数 t 提取 token 并持久化
-        (function() {
-            var params = new URLSearchParams(window.location.search);
-            var t = params.get('t');
-            if (t) {
-                localStorage.setItem('token', t);
-            }
-        })();
-
-        // Go template parses double-brace; use hex escapes to define template variable delimiters
+        // 认证走 httpOnly Cookie，fetch 自动携带，无需手动附加 token
         var T_OPEN = '\x7B\x7B';   // double-open-brace
         var T_CLOSE = '\x7D\x7D';  // double-close-brace
 
-        function getToken() {
-            return localStorage.getItem('token') || '';
-        }
         function authFetch(url, options) {
-            options = options || {};
-            options.headers = options.headers || {};
-            options.headers['Authorization'] = 'Bearer ' + getToken();
             return fetch(url, options);
         }
 
@@ -1124,8 +1066,14 @@
         // ============================================================
         // Tab 切换
         // ============================================================
+        // 知识库 / 知识库绑定 为独立页面，点击在新窗口打开，不切 section
+        var externalTabs = { 'kbmgmt': '/vdb/idx', 'vdb-bind': '/admin/vdb/bind' };
         document.querySelectorAll('.cfg-tab').forEach(tab => {
             tab.addEventListener('click', () => {
+                if (externalTabs[tab.dataset.tab]) {
+                    window.open(externalTabs[tab.dataset.tab], '_blank');
+                    return;
+                }
                 document.querySelectorAll('.cfg-tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.cfg-section').forEach(s => s.classList.remove('active'));
                 tab.classList.add('active');
@@ -2751,10 +2699,11 @@
             loadWorkflowList();
         }
 
-        // 退出登录
+        // 退出登录（认证走 httpOnly Cookie，调用后端使 token 失效）
         function logout() {
-            localStorage.removeItem('token');
-            window.location.href = '/login';
+            authFetch('/api/logout', { method: 'POST' }).finally(function() {
+                window.location.href = '/login';
+            });
         }
 
         initPage();

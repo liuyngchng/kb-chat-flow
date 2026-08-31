@@ -54,21 +54,8 @@
     </div>
 
     <script>
-        (function() {
-            var params = new URLSearchParams(window.location.search);
-            var t = params.get('t');
-            if (t) {
-                localStorage.setItem('token', t);
-            }
-        })();
-
-        function getToken() {
-            return localStorage.getItem('token') || '';
-        }
+        // 认证走 httpOnly Cookie，fetch 自动携带，无需手动附加 token
         function authFetch(url, options) {
-            options = options || {};
-            options.headers = options.headers || {};
-            options.headers['Authorization'] = 'Bearer ' + getToken();
             return fetch(url, options);
         }
 

@@ -1,15 +1,7 @@
 // 业务知识库绑定页 JS（独立页面，供管理员配置客服流程各分支使用的知识库）
 
-// 获取 token
-function getToken() {
-    return localStorage.getItem('token') || '';
-}
-
-// 带认证头的 fetch 封装
+// 认证走 httpOnly Cookie，fetch 自动携带，无需手动附加 token
 function authFetch(url, options) {
-    options = options || {};
-    options.headers = options.headers || {};
-    options.headers['Authorization'] = 'Bearer ' + getToken();
     return fetch(url, options);
 }
 
