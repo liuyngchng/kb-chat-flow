@@ -322,6 +322,7 @@ function showChangePwd() {
     document.getElementById('pwdModal').style.display = 'flex';
     document.getElementById('oldPwd').value = '';
     document.getElementById('newPwd').value = '';
+    document.getElementById('newPwd2').value = '';
     document.getElementById('pwdError').style.display = 'none';
 }
 function hideChangePwd() {
@@ -331,9 +332,15 @@ document.getElementById('pwdForm').addEventListener('submit', async function(e) 
     e.preventDefault();
     const oldPwd = document.getElementById('oldPwd').value.trim();
     const newPwd = document.getElementById('newPwd').value.trim();
+    const newPwd2 = document.getElementById('newPwd2').value.trim();
     const errDiv = document.getElementById('pwdError');
-    if (!oldPwd || !newPwd) {
+    if (!oldPwd || !newPwd || !newPwd2) {
         errDiv.textContent = '密码不能为空';
+        errDiv.style.display = 'block';
+        return;
+    }
+    if (newPwd !== newPwd2) {
+        errDiv.textContent = '两次输入的新密码不一致';
         errDiv.style.display = 'block';
         return;
     }

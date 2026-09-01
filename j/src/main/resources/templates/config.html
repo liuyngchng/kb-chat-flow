@@ -905,6 +905,33 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 重置密码弹窗 -->
+                <div id="resetPwdModal" class="pwd-modal-overlay" style="display:none;">
+                    <div class="pwd-modal" style="max-width:480px;width:90%;">
+                        <h3><i class="fas fa-redo"></i> 重置密码</h3>
+                        <div class="pwd-modal-error" id="resetPwdError" style="display:none;"></div>
+                        <form id="resetPwdForm">
+                            <div class="pwd-field">
+                                <label>用户名</label>
+                                <input type="text" id="resetPwdName" readonly>
+                            </div>
+                            <div class="pwd-field">
+                                <label>新密码 <span style="color:#e53935;">*</span></label>
+                                <input type="password" id="resetPwdNew" required autocomplete="new-password">
+                            </div>
+                            <div class="pwd-field">
+                                <label>确认新密码 <span style="color:#e53935;">*</span></label>
+                                <input type="password" id="resetPwdNew2" required autocomplete="new-password">
+                            </div>
+                            <div class="pwd-actions">
+                                <button type="button" class="cfg-btn cfg-btn-reset" onclick="hideResetPwd()">取消</button>
+                                <button type="submit" class="cfg-btn cfg-btn-save">确认重置</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
                 <!-- 意图分类测试 -->
                 <div class="cfg-section" id="section-intent">
                     <h2><i class="fas fa-brain"></i> 意图识别测试</h2>
@@ -1573,7 +1600,7 @@
                         <td>${ROLE_NAMES[u.role] || u.role}</td>
                         <td>${escHtml2(u.note)}</td>
                         <td>
-                            <button class="cfg-btn cfg-btn-reset" style="padding:4px 12px;font-size:0.8rem;" onclick="resetPwd('${escHtml2(u.user_name)}')"><i class="fas fa-redo"></i> 重置密码</button>
+                            <button class="cfg-btn cfg-btn-reset" style="padding:4px 12px;font-size:0.8rem;" onclick="showResetPwd('${escHtml2(u.user_name)}')"><i class="fas fa-redo"></i> 重置密码</button>
                             <button class="cfg-btn cfg-btn-reset" style="padding:4px 12px;font-size:0.8rem;color:#c62828;" onclick="delUser('${escHtml2(u.user_name)}')"><i class="fas fa-trash"></i> 删除</button>
                         </td>
                     </tr>`
@@ -1613,9 +1640,34 @@
             } catch(e) { alert('网络错误: '+e.message); }
         }
 
-        async function resetPwd(name) {
-            const pwd = prompt('输入用户 "' + name + '" 的新密码：');
-            if (!pwd) return;
+        // 重置密码弹窗
+        function showResetPwd(name) {
+            document.getElementById('resetPwdName').value = name;
+            document.getElementById('resetPwdNew').value = '';
+            document.getElementById('resetPwdNew2').value = '';
+            document.getElementById('resetPwdError').style.display = 'none';
+            document.getElementById('resetPwdModal').style.display = 'flex';
+            setTimeout(function(){ document.getElementById('resetPwdNew').focus(); }, 50);
+        }
+        function hideResetPwd() {
+            document.getElementById('resetPwdModal').style.display = 'none';
+        }
+        document.getElementById('resetPwdForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const name = document.getElementById('resetPwdName').value;
+            const pwd = document.getElementById('resetPwdNew').value;
+            const pwd2 = document.getElementById('resetPwdNew2').value;
+            const errDiv = document.getElementById('resetPwdError');
+            if (!pwd || !pwd2) {
+                errDiv.textContent = '新密码不能为空';
+                errDiv.style.display = 'block';
+                return;
+            }
+            if (pwd !== pwd2) {
+                errDiv.textContent = '两次输入的密码不一致';
+                errDiv.style.display = 'block';
+                return;
+            }
             try {
                 const resp = await authFetch('/api/users/' + encodeURIComponent(name) + '/reset-pwd', {
                     method: 'PUT',
@@ -1623,10 +1675,18 @@
                     body: JSON.stringify({user_pwd: pwd})
                 });
                 const data = await resp.json();
-                if (data.status === 'ok') alert('密码已重置');
-                else alert(data.error || '重置失败');
-            } catch(e) { alert('网络错误: '+e.message); }
-        }
+                if (data.status === 'ok') {
+                    hideResetPwd();
+                    alert('密码已重置');
+                } else {
+                    errDiv.textContent = data.error || '重置失败';
+                    errDiv.style.display = 'block';
+                }
+            } catch(e) {
+                errDiv.textContent = '网络错误: ' + e.message;
+                errDiv.style.display = 'block';
+            }
+        });
 
         function escHtml2(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
