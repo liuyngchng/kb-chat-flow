@@ -130,7 +130,7 @@ public class HttpServer {
                         User user = authenticateByScheme(path, request);
                         if (user == null) {
                             if (path.startsWith("/open_api/")) {
-                                sendJson(ctx, 401, "{\"error\":\"缺少或无效的 t 参数(token)\"}");
+                                sendJson(ctx, 401, "{\"error\":\"未提供认证 token，请使用 Authorization: Bearer <token>\"}");
                             } else {
                                 sendJson(ctx, 401, "{\"error\":\"未提供有效认证 token\"}");
                             }
@@ -164,12 +164,12 @@ public class HttpServer {
         }
 
         private boolean requiresAuth(String path) {
-            // /open_api/* is always authenticated (third-party API, URL t=token), independent of api_auth switch
+            // /open_api/* is always authenticated (third-party API, Bearer header), independent of api_auth switch
             if (path.startsWith("/open_api/")) return true;
             // If API auth is disabled globally, skip token check for frontend API
             if (!config.getSys().isApiAuth()) return false;
-            // Only API routes need token authentication
-            if (!path.startsWith("/api/")) return false;
+            // Only API v1 routes need token authentication
+            if (!path.startsWith("/api/v1/")) return false;
             // Login API is public
             if (path.equals("/api/login")) return false;
             return true;
@@ -177,44 +177,61 @@ public class HttpServer {
 
         /**
          * 按路径选择认证方案：
-         *  - /open_api/*（第三方）: 仅接受 URL t=token 参数
-         *  - 其他 /api/*（前端）:  httpOnly Cookie（兼容 Bearer / URL t 兜底）
+         *  - /open_api/*（第三方）: 仅接受 Authorization: Bearer header
+         *  - /api/v1/*（前端）:    仅接受 httpOnly Cookie
+         *  - 其他（兼容）:          Cookie 优先，Bearer 兜底
          */
         private User authenticateByScheme(String path, FullHttpRequest request) {
             if (path.startsWith("/open_api/")) {
-                String tokenStr = getQueryParam(request, "t");
+                String tokenStr = TokenProvider.extractTokenFromBearer(
+                        request.headers().get(HttpHeaderNames.AUTHORIZATION));
                 return tokenStr != null ? TokenProvider.parseToken(tokenStr) : null;
             }
+            if (path.startsWith("/api/v1/")) {
+                String tokenStr = TokenProvider.extractTokenFromCookie(
+                        request.headers().get(HttpHeaderNames.COOKIE));
+                return tokenStr != null ? TokenProvider.parseToken(tokenStr) : null;
+            }
+            // 兼容旧路径（/api/）: Cookie 优先，Bearer 兜底
             return authenticateRequest(request);
         }
 
         private boolean isAdminPath(String path, String method) {
             // Pages
             if (path.startsWith("/admin/")) return true;
+
+            // Normalize: strip /api/v1 and /open_api prefixes, then reuse the same admin-path rules.
+            String normalized = path;
+            if (path.startsWith("/api/v1/")) {
+                normalized = "/api/" + path.substring("/api/v1/".length());
+            } else if (path.startsWith("/open_api/")) {
+                normalized = "/api/" + path.substring("/open_api/".length());
+            }
+
             // Config write
-            if (path.equals("/api/config") && !"GET".equalsIgnoreCase(method)) return true;
-            if (path.equals("/api/config/test-models")) return true;
+            if (normalized.equals("/api/config") && !"GET".equalsIgnoreCase(method)) return true;
+            if (normalized.equals("/api/config/test-models")) return true;
             // VDB write
-            if (path.equals("/api/vdb") && ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method))) return true;
-            if (path.matches("/api/vdb/\\d+") && "DELETE".equalsIgnoreCase(method)) return true;
-            if (path.matches("/api/vdb/\\d+/default") && "PUT".equalsIgnoreCase(method)) return true;
-            if (path.matches("/api/vdb/\\d+/files") && "GET".equalsIgnoreCase(method)) return true;
-            if (path.matches("/api/vdb/\\d+/upload") && "POST".equalsIgnoreCase(method)) return true;
-            if (path.matches("/api/vdb/file/\\d+/progress")) return true;
-            if (path.matches("/api/vdb/file/\\d+/chunks")) return true;
-            if (path.matches("/api/vdb/file/\\d+/download")) return true;
-            if (path.startsWith("/api/vdb/file/") && path.endsWith("/delete")) return true;
-            if (path.startsWith("/api/vdb/bindings")) return true;
+            if (normalized.equals("/api/vdb") && ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method))) return true;
+            if (normalized.matches("/api/vdb/\\d+") && "DELETE".equalsIgnoreCase(method)) return true;
+            if (normalized.matches("/api/vdb/\\d+/default") && "PUT".equalsIgnoreCase(method)) return true;
+            if (normalized.matches("/api/vdb/\\d+/files") && "GET".equalsIgnoreCase(method)) return true;
+            if (normalized.matches("/api/vdb/\\d+/upload") && "POST".equalsIgnoreCase(method)) return true;
+            if (normalized.matches("/api/vdb/file/\\d+/progress")) return true;
+            if (normalized.matches("/api/vdb/file/\\d+/chunks")) return true;
+            if (normalized.matches("/api/vdb/file/\\d+/download")) return true;
+            if (normalized.startsWith("/api/vdb/file/") && normalized.endsWith("/delete")) return true;
+            if (normalized.startsWith("/api/vdb/bindings")) return true;
             // FAQ write
-            if (path.equals("/api/faq") && ("POST".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
-            if (path.equals("/api/faq/upload")) return true;
-            if (path.matches("/api/faq/\\d+") && ("PUT".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
+            if (normalized.equals("/api/faq") && ("POST".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
+            if (normalized.equals("/api/faq/upload")) return true;
+            if (normalized.matches("/api/faq/\\d+") && ("PUT".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
             // User management
-            if (path.equals("/api/users")) return true;
-            if (path.matches("/api/users/[^/]+")) return true;
+            if (normalized.equals("/api/users")) return true;
+            if (normalized.matches("/api/users/[^/]+")) return true;
             // Workflow write
-            if (path.equals("/api/workflows") && "POST".equalsIgnoreCase(method)) return true;
-            if (path.matches("/api/workflows/\\d+") && ("PUT".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
+            if (normalized.equals("/api/workflows") && "POST".equalsIgnoreCase(method)) return true;
+            if (normalized.matches("/api/workflows/\\d+") && ("PUT".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
             return false;
         }
 

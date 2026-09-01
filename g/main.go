@@ -232,7 +232,11 @@ func main() {
 	// 路由注册（按 server.role 区分）
 	// ============================================================
 
-	// --- 聊天页面（仅 chat 角色） ---
+	// ============================================================
+	// 前端页面路由（Cookie 认证，无 Cookie 重定向到 /login）
+	// ============================================================
+
+	// 聊天页面（仅 chat 角色）
 	if isChat {
 		chatPage := r.Group("/")
 		chatPage.Use(h.Auth.AuthMiddleware())
@@ -242,59 +246,69 @@ func main() {
 		}
 	}
 
-	// --- 需要认证的 API 路由（读操作：所有角色共享，包括 admin SPA 所需） ---
-	authAPI := r.Group("/api")
-	authAPI.Use(h.Auth.ApiAuthMiddleware())
-	{
-		// 当前用户信息
-		authAPI.GET("/me", h.Auth.Me)
-
-		// 在线座席
-		authAPI.GET("/agents", h.Auth.GetOnlineAgents)
-
-		// 工作流（所有认证用户可读）
-		authAPI.GET("/workflows", h.Workflow.ListPublic)
-		authAPI.GET("/workflows/:id", h.Workflow.Get)
-
-		// 系统配置（读取）
-		authAPI.GET("/config", h.Config.GetConfig)
-
-		// 服务信息
-		authAPI.GET("/info", h.Config.Info)
-
-		// 意图分类测试（所有认证用户可用）
-		authAPI.POST("/classifier/test", h.Chat.TestClassifier)
-
-		// AI Agent（所有认证用户可读写）
-		authAPI.GET("/ai-agents", h.Agent.List)
-		authAPI.GET("/ai-agents/public", h.Agent.ListPublic)
-		authAPI.GET("/ai-agents/:id", h.Agent.Get)
-
-		// 系统变量列表（供创建 Agent 时参考可用变量）
-		authAPI.GET("/system-vars", h.Agent.ListSystemVars)
-
-		// FAQ（所有认证用户可读）
-		authAPI.GET("/faq", h.Faq.List)
-		authAPI.GET("/faq/template", h.Faq.Template)
-		authAPI.POST("/faq/match", h.Faq.Match)
-
-		// 知识库（VDB）—— 读操作
-		authAPI.GET("/vdb", h.Vdb.MyList)
-		authAPI.GET("/vdb/pub", h.Vdb.PubList)
-		authAPI.POST("/vdb/search", h.Vdb.Search)
-	}
-
-	// --- 需要认证的页面路由（所有角色共享） ---
+	// 知识库页面（所有角色共享）
 	sharedPage := r.Group("/")
 	sharedPage.Use(h.Auth.AuthMiddleware())
 	{
 		sharedPage.GET("/vdb/idx", h.Page.VdbIndex)
 	}
 
+	// 管理员页面（仅 admin 角色）
+	if isAdmin {
+		adminPage := r.Group("/admin")
+		adminPage.Use(h.Auth.AuthMiddleware(), h.Auth.AdminOnlyMiddleware())
+		{
+			adminPage.GET("/config", h.Page.ConfigIndex)
+			adminPage.GET("/vdb/bind", h.Page.VdbBindIndex)
+		}
+	}
+
+	// ============================================================
+	// /api/v1/ — 前端专用（仅 httpOnly Cookie 认证）
+	// 受 sys.api_auth 开关控制，按 server.role 区分路由
+	// ============================================================
+	v1 := r.Group("/api/v1")
+	v1.Use(h.Auth.CookieApiAuthMiddleware())
+	{
+		// --- 共享读操作（所有角色） ---
+		v1.GET("/me", h.Auth.Me)
+		v1.GET("/agents", h.Auth.GetOnlineAgents)
+
+		// 工作流（所有认证用户可读）
+		v1.GET("/workflows", h.Workflow.ListPublic)
+		v1.GET("/workflows/:id", h.Workflow.Get)
+
+		// 系统配置（读取）
+		v1.GET("/config", h.Config.GetConfig)
+
+		// 服务信息
+		v1.GET("/info", h.Config.Info)
+
+		// 意图分类测试（所有认证用户可用）
+		v1.POST("/classifier/test", h.Chat.TestClassifier)
+
+		// AI Agent（读）
+		v1.GET("/ai-agents", h.Agent.List)
+		v1.GET("/ai-agents/public", h.Agent.ListPublic)
+		v1.GET("/ai-agents/:id", h.Agent.Get)
+
+		// 系统变量列表
+		v1.GET("/system-vars", h.Agent.ListSystemVars)
+
+		// FAQ（读）
+		v1.GET("/faq", h.Faq.List)
+		v1.GET("/faq/template", h.Faq.Template)
+		v1.POST("/faq/match", h.Faq.Match)
+
+		// 知识库（VDB）—— 读操作
+		v1.GET("/vdb", h.Vdb.MyList)
+		v1.GET("/vdb/pub", h.Vdb.PubList)
+		v1.POST("/vdb/search", h.Vdb.Search)
+	}
+
 	// --- 聊天 API（仅 chat 角色） ---
 	if isChat {
-		chatAPI := r.Group("/api")
-		chatAPI.Use(h.Auth.ApiAuthMiddleware())
+		chatAPI := v1.Group("")
 		{
 			chatAPI.POST("/chat", h.Chat.Chat)
 			chatAPI.POST("/chat/sync", h.Chat.ChatSync)
@@ -308,20 +322,10 @@ func main() {
 		}
 	}
 
-	// --- 管理员页面（仅 admin 角色） ---
-	if isAdmin {
-		adminPage := r.Group("/admin")
-		adminPage.Use(h.Auth.AuthMiddleware(), h.Auth.AdminOnlyMiddleware())
-		{
-			adminPage.GET("/config", h.Page.ConfigIndex)
-			adminPage.GET("/vdb/bind", h.Page.VdbBindIndex)
-		}
-	}
-
 	// --- 管理员写 API（仅 admin 角色） ---
 	if isAdmin {
-		adminAPI := r.Group("/api")
-		adminAPI.Use(h.Auth.ApiAuthMiddleware(), h.Auth.AdminOnlyMiddleware())
+		adminAPI := v1.Group("")
+		adminAPI.Use(h.Auth.AdminOnlyMiddleware())
 		{
 			adminAPI.PUT("/config", h.Config.UpdateConfig)
 			adminAPI.POST("/config/test-models", h.Config.TestModels)
@@ -361,14 +365,99 @@ func main() {
 		}
 	}
 
-	// --- 用户自助 API（所有角色共享） ---
-	userAPI := r.Group("/api/user")
-	userAPI.Use(h.Auth.ApiAuthMiddleware())
+	// 用户自助 API（所有角色共享）
+	v1User := v1.Group("/user")
 	{
-		userAPI.PUT("/password", h.User.ChangePassword)
-		userAPI.GET("/tokens", h.User.ListMyTokens)
-		userAPI.POST("/token", h.User.GenerateToken)
-		userAPI.GET("/call-logs", h.User.MyCallLogs)
+		v1User.PUT("/password", h.User.ChangePassword)
+		v1User.GET("/tokens", h.User.ListMyTokens)
+		v1User.POST("/token", h.User.GenerateToken)
+		v1User.GET("/call-logs", h.User.MyCallLogs)
+	}
+
+	// ============================================================
+	// /open_api/ — 第三方专用（Authorization: Bearer <token> 认证）
+	// 始终要求有效 token，不受 sys.api_auth 开关影响
+	// 按 server.role 区分路由（与 /api/v1/ 保持一致）
+	// ============================================================
+	openAPI := r.Group("/open_api")
+	openAPI.Use(h.Auth.BearerAuthMiddleware())
+	{
+		// --- 共享读操作（所有角色） ---
+		openAPI.GET("/me", h.Auth.Me)
+		openAPI.GET("/agents", h.Auth.GetOnlineAgents)
+		openAPI.GET("/workflows", h.Workflow.ListPublic)
+		openAPI.GET("/workflows/:id", h.Workflow.Get)
+		openAPI.GET("/config", h.Config.GetConfig)
+		openAPI.GET("/info", h.Config.Info)
+		openAPI.POST("/classifier/test", h.Chat.TestClassifier)
+		openAPI.GET("/ai-agents", h.Agent.List)
+		openAPI.GET("/ai-agents/public", h.Agent.ListPublic)
+		openAPI.GET("/ai-agents/:id", h.Agent.Get)
+		openAPI.GET("/system-vars", h.Agent.ListSystemVars)
+		openAPI.GET("/faq", h.Faq.List)
+		openAPI.GET("/faq/template", h.Faq.Template)
+		openAPI.POST("/faq/match", h.Faq.Match)
+		openAPI.GET("/vdb", h.Vdb.MyList)
+		openAPI.GET("/vdb/pub", h.Vdb.PubList)
+		openAPI.POST("/vdb/search", h.Vdb.Search)
+	}
+
+	// --- open_api 聊天 API（仅 chat 角色） ---
+	if isChat {
+		openAPIChat := openAPI.Group("")
+		{
+			openAPIChat.POST("/chat", h.Chat.Chat)
+			openAPIChat.POST("/chat/sync", h.Chat.ChatSync)
+			openAPIChat.GET("/chat/history", h.Chat.History)
+			openAPIChat.POST("/chat/clear", h.Chat.Clear)
+
+			// Agent 写操作
+			openAPIChat.POST("/ai-agents", h.Agent.Create)
+			openAPIChat.PUT("/ai-agents/:id", h.Agent.Update)
+			openAPIChat.DELETE("/ai-agents/:id", h.Agent.Delete)
+		}
+	}
+
+	// --- open_api 管理员 API（仅 admin 角色） ---
+	if isAdmin {
+		openAPIAdmin := openAPI.Group("")
+		openAPIAdmin.Use(h.Auth.AdminOnlyMiddleware())
+		{
+			openAPIAdmin.PUT("/config", h.Config.UpdateConfig)
+			openAPIAdmin.POST("/config/test-models", h.Config.TestModels)
+			openAPIAdmin.GET("/vdb/bindings", h.Vdb.BindingGet)
+			openAPIAdmin.PUT("/vdb/bindings", h.Vdb.BindingPut)
+			openAPIAdmin.POST("/faq", h.Faq.Create)
+			openAPIAdmin.POST("/faq/upload", h.Faq.Upload)
+			openAPIAdmin.PUT("/faq/:id", h.Faq.Update)
+			openAPIAdmin.DELETE("/faq/:id", h.Faq.Delete)
+			openAPIAdmin.DELETE("/faq", h.Faq.ClearAll)
+			openAPIAdmin.GET("/users", h.User.ListUsers)
+			openAPIAdmin.POST("/users", h.User.CreateUser)
+			openAPIAdmin.DELETE("/users/:name", h.User.DeleteUser)
+			openAPIAdmin.PUT("/users/:name/reset-pwd", h.User.ResetUserPwd)
+			openAPIAdmin.POST("/workflows", h.Workflow.Create)
+			openAPIAdmin.PUT("/workflows/:id", h.Workflow.Update)
+			openAPIAdmin.DELETE("/workflows/:id", h.Workflow.Delete)
+			openAPIAdmin.POST("/vdb", h.Vdb.Create)
+			openAPIAdmin.DELETE("/vdb/:id", h.Vdb.Delete)
+			openAPIAdmin.PUT("/vdb/:id/default", h.Vdb.SetDefault)
+			openAPIAdmin.GET("/vdb/:id/files", h.Vdb.FileList)
+			openAPIAdmin.POST("/vdb/:id/upload", h.Vdb.Upload)
+			openAPIAdmin.GET("/vdb/file/:id/progress", h.Vdb.ProcessInfo)
+			openAPIAdmin.GET("/vdb/file/:id/chunks", h.Vdb.Chunks)
+			openAPIAdmin.GET("/vdb/file/:id/download", h.Vdb.Download)
+			openAPIAdmin.DELETE("/vdb/file/:id", h.Vdb.FileDelete)
+		}
+	}
+
+	// open_api 用户自助 API（所有角色共享）
+	openAPIUser := openAPI.Group("/user")
+	{
+		openAPIUser.PUT("/password", h.User.ChangePassword)
+		openAPIUser.GET("/tokens", h.User.ListMyTokens)
+		openAPIUser.POST("/token", h.User.GenerateToken)
+		openAPIUser.GET("/call-logs", h.User.MyCallLogs)
 	}
 
 	// 优雅退出

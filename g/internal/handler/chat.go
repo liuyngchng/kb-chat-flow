@@ -48,8 +48,14 @@ func NewChatHandler(cfg *model.Config, kbMgr *kb.Manager, sessionMgr *session.Ma
 	}
 }
 
-// resolveUID 根据 api_auth 开关决定使用哪个 UID
+// resolveUID 根据认证来源决定 UID
+// open_api (Bearer): 强制使用 token 中的用户名，不接受请求体中的 uid
+// 前端 (Cookie): api_auth 开启时强制使用 token uid，关闭时优先使用请求体中的 uid
 func (h *ChatHandler) resolveUID(c *gin.Context, reqUID string) string {
+	if isBearerAuth(c) {
+		// open_api: 始终使用 token 中的用户名
+		return getAuthUID(c)
+	}
 	if h.cfg.Sys.ApiAuth {
 		// API 认证开启时，强制使用 token 解析的 uid
 		return getAuthUID(c)

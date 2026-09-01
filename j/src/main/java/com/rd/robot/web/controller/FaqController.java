@@ -386,13 +386,23 @@ public class FaqController {
 
     private static long parseIdFromPath(String uri) {
         String path = HttpServer.sanitizePath(uri);
-        if (path.startsWith("/api/faq/")) {
-            String rest = path.substring(9);
-            int slashIdx = rest.indexOf('/');
-            if (slashIdx >= 0) rest = rest.substring(0, slashIdx);
+        String rest = extractIdFromPath(path, "/api/faq/", "/api/v1/faq/", "/open_api/faq/");
+        if (rest != null) {
             try { return Long.parseLong(rest); } catch (NumberFormatException ignored) {}
         }
         return 0;
+    }
+
+    private static String extractIdFromPath(String path, String... prefixes) {
+        for (String prefix : prefixes) {
+            if (path.startsWith(prefix)) {
+                String rest = path.substring(prefix.length());
+                int slashIdx = rest.indexOf('/');
+                if (slashIdx >= 0) rest = rest.substring(0, slashIdx);
+                return rest;
+            }
+        }
+        return null;
     }
 
     private static String truncate(String s, int maxLen) {

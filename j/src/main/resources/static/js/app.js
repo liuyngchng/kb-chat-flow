@@ -130,7 +130,7 @@ async function fetchQueryData(query) {
     currentBotMessage = addMessage('<div class="typing-indicator"><span></span><span></span><span></span> 思考中...</div>', 'bot');
 
     try {
-        const response = await authFetch('/api/chat', {
+        const response = await authFetch('/api/v1/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -279,7 +279,7 @@ async function newChat() {
         abortController.abort();
     }
     try {
-        await authFetch('/api/chat/clear', {
+        await authFetch('/api/v1/chat/clear', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({})
@@ -345,7 +345,7 @@ document.getElementById('pwdForm').addEventListener('submit', async function(e) 
         return;
     }
     try {
-        const resp = await authFetch('/api/user/password', {
+        const resp = await authFetch('/api/v1/user/password', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ old_pwd: oldPwd, new_pwd: newPwd })

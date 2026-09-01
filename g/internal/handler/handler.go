@@ -25,6 +25,15 @@ func getAuthUID(c *gin.Context) string {
 	return user.UserName
 }
 
+// isBearerAuth 判断当前请求是否来自 open_api (Bearer 认证)
+func isBearerAuth(c *gin.Context) bool {
+	source, exists := c.Get(authSourceKey)
+	if !exists {
+		return false
+	}
+	return source == "bearer"
+}
+
 // Handler 聚合所有处理器
 type Handler struct {
 	Page     *PageHandler

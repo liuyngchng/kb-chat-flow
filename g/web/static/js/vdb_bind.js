@@ -16,7 +16,7 @@ const BIND_FIELDS = [
 async function loadBindings() {
     try {
         // 读取当前绑定
-        const resp = await authFetch('/api/vdb/bindings');
+        const resp = await authFetch('/api/v1/vdb/bindings');
         if (resp.status === 403 || resp.status === 401) {
             alert('无权访问：仅管理员可配置知识库绑定');
             return;
@@ -25,7 +25,7 @@ async function loadBindings() {
         const bindings = data.data || {};
 
         // 用知识库列表填充三个多选下拉
-        const kbResp = await authFetch('/api/vdb');
+        const kbResp = await authFetch('/api/v1/vdb');
         const kbData = await kbResp.json();
         const kbs = kbData.data || [];
 
@@ -64,7 +64,7 @@ async function saveBindings() {
     });
 
     try {
-        const resp = await authFetch('/api/vdb/bindings', {
+        const resp = await authFetch('/api/v1/vdb/bindings', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

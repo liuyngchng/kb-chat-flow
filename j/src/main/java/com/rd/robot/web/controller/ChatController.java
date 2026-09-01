@@ -182,6 +182,11 @@ public class ChatController {
     }
 
     private String resolveUID(FullHttpRequest request, ChatRequest req) {
+        // open_api (Bearer): 强制使用 token 中的用户名
+        String path = HttpServer.sanitizePath(request.uri());
+        if (path.startsWith("/open_api/")) {
+            return getUid(request);
+        }
         if (cfg.getSys().isApiAuth()) {
             // API auth enabled: force token UID
             return getUid(request);

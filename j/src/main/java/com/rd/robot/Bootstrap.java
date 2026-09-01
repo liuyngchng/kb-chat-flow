@@ -151,125 +151,150 @@ public class Bootstrap {
             router.addRoute("GET", "/admin/vdb/bind", pageController::vdbBindIndex);
         }
 
-        // -- Auth API (JSON) --
+        // -- Auth API (JSON, public) --
         router.addRoute("POST", "/api/login", authController::login);
         router.addRoute("POST", "/api/logout", authController::logout);
         router.addRoute("POST", "/api/register", userController::register);
-        router.addRoute("GET", "/api/me", authController::me);
-        router.addRoute("GET", "/api/agents", authController::getOnlineAgents);
-
-        // -- Chat API (only chat role) --
-        if (isChat) {
-            router.addRoute("POST", "/api/chat", chatController::chat);
-            router.addRoute("POST", "/api/chat/sync", chatController::chatSync);
-            router.addRoute("GET", "/api/chat/history", chatController::history);
-            router.addRoute("POST", "/api/chat/clear", chatController::clear);
-        }
-
-        // -- Config API (read: shared, write: admin only) --
-        router.addRoute("GET", "/api/config", configController::getConfig);
-        router.addRoute("GET", "/api/info", configController::info);
-        if (isAdmin) {
-            router.addRoute("PUT", "/api/config", configController::updateConfig);
-            router.addRoute("POST", "/api/config/test-models", configController::testModels);
-        }
-
-        // -- VDB API --
-        // Read: shared
-        router.addRoute("GET", "/api/vdb", vdbController::myList);
-        router.addRoute("GET", "/api/vdb/pub", vdbController::pubList);
-        router.addRoute("POST", "/api/vdb/search", vdbController::search);
-        // Write: admin only
-        if (isAdmin) {
-            router.addRoute("POST", "/api/vdb", vdbController::create);
-            router.addRoute("DELETE", "/api/vdb/:id", vdbController::delete);
-            router.addRoute("PUT", "/api/vdb/:id/default", vdbController::setDefault);
-            router.addRoute("GET", "/api/vdb/:id/files", vdbController::fileList);
-            router.addRoute("POST", "/api/vdb/:id/upload", vdbController::upload);
-            router.addRoute("GET", "/api/vdb/file/:id/progress", vdbController::processInfo);
-            router.addRoute("GET", "/api/vdb/file/:id/chunks", vdbController::chunks);
-            router.addRoute("GET", "/api/vdb/file/:id/download", vdbController::download);
-            router.addRoute("DELETE", "/api/vdb/file/:id", vdbController::fileDelete);
-            router.addRoute("GET", "/api/vdb/bindings", vdbController::bindingGet);
-            router.addRoute("PUT", "/api/vdb/bindings", vdbController::bindingPut);
-        }
-
-        // -- FAQ API --
-        // Read: shared
-        router.addRoute("GET", "/api/faq", faqController::list);
-        router.addRoute("GET", "/api/faq/template", faqController::template);
-        router.addRoute("POST", "/api/faq/match", faqController::match);
-        // Write: admin only
-        if (isAdmin) {
-            router.addRoute("POST", "/api/faq", faqController::create);
-            router.addRoute("POST", "/api/faq/upload", faqController::upload);
-            router.addRoute("PUT", "/api/faq/:id", faqController::update);
-            router.addRoute("DELETE", "/api/faq/:id", faqController::delete);
-            router.addRoute("DELETE", "/api/faq", faqController::clearAll);
-        }
-
-        // -- User API (admin) --
-        if (isAdmin) {
-            router.addRoute("GET", "/api/users", userController::listUsers);
-            router.addRoute("POST", "/api/users", userController::createUser);
-            router.addRoute("DELETE", "/api/users/:name", userController::deleteUser);
-            router.addRoute("PUT", "/api/users/:name/reset-pwd", userController::resetUserPwd);
-        }
-
-        // -- User API (self-service, all roles) --
-        router.addRoute("PUT", "/api/user/password", userController::changePassword);
-        router.addRoute("GET", "/api/user/tokens", userController::listMyTokens);
-        router.addRoute("POST", "/api/user/token", userController::generateToken);
-        router.addRoute("GET", "/api/user/call-logs", userController::myCallLogs);
-
-        // -- AI Agent API --
-        // Read: shared
-        router.addRoute("GET", "/api/system-vars", agentController::listSystemVars);
-        router.addRoute("GET", "/api/ai-agents/public", agentController::listPublic);
-        router.addRoute("GET", "/api/ai-agents", agentController::list);
-        router.addRoute("GET", "/api/ai-agents/:id", agentController::get);
-        // Write: chat role
-        if (isChat) {
-            router.addRoute("POST", "/api/ai-agents", agentController::create);
-            router.addRoute("PUT", "/api/ai-agents/:id", agentController::update);
-            router.addRoute("DELETE", "/api/ai-agents/:id", agentController::delete);
-        }
-
-        // -- Workflow API --
-        // Read: shared
-        router.addRoute("GET", "/api/workflows", workflowController::listPublic);
-        router.addRoute("GET", "/api/workflows/:id", workflowController::get);
-        // Write: admin only
-        if (isAdmin) {
-            router.addRoute("POST", "/api/workflows", workflowController::create);
-            router.addRoute("PUT", "/api/workflows/:id", workflowController::update);
-            router.addRoute("DELETE", "/api/workflows/:id", workflowController::delete);
-        }
-
-        // -- Classifier test (shared) --
-        router.addRoute("POST", "/api/classifier/test", chatController::testClassifier);
 
         // ============================================================
-        // Open API — 第三方开放接口（URL t=token 认证，网关层统一处理）
-        // 与前端 /api/* 共用同一套核心 handler，仅入口与认证方式不同。
-        // 仅开放查询/问答类能力，管理类写操作不对外开放。
+        // /api/v1/ — 前端专用（httpOnly Cookie 认证，按 role 区分）
         // ============================================================
+
+        // --- 共享读操作（所有角色） ---
+        router.addRoute("GET", "/api/v1/me", authController::me);
+        router.addRoute("GET", "/api/v1/agents", authController::getOnlineAgents);
+        router.addRoute("GET", "/api/v1/workflows", workflowController::listPublic);
+        router.addRoute("GET", "/api/v1/workflows/:id", workflowController::get);
+        router.addRoute("GET", "/api/v1/config", configController::getConfig);
+        router.addRoute("GET", "/api/v1/info", configController::info);
+        router.addRoute("POST", "/api/v1/classifier/test", chatController::testClassifier);
+        router.addRoute("GET", "/api/v1/ai-agents", agentController::list);
+        router.addRoute("GET", "/api/v1/ai-agents/public", agentController::listPublic);
+        router.addRoute("GET", "/api/v1/ai-agents/:id", agentController::get);
+        router.addRoute("GET", "/api/v1/system-vars", agentController::listSystemVars);
+        router.addRoute("GET", "/api/v1/faq", faqController::list);
+        router.addRoute("GET", "/api/v1/faq/template", faqController::template);
+        router.addRoute("POST", "/api/v1/faq/match", faqController::match);
+        router.addRoute("GET", "/api/v1/vdb", vdbController::myList);
+        router.addRoute("GET", "/api/v1/vdb/pub", vdbController::pubList);
+        router.addRoute("POST", "/api/v1/vdb/search", vdbController::search);
+
+        // --- 聊天 API（仅 chat 角色） ---
+        if (isChat) {
+            router.addRoute("POST", "/api/v1/chat", chatController::chat);
+            router.addRoute("POST", "/api/v1/chat/sync", chatController::chatSync);
+            router.addRoute("GET", "/api/v1/chat/history", chatController::history);
+            router.addRoute("POST", "/api/v1/chat/clear", chatController::clear);
+            router.addRoute("POST", "/api/v1/ai-agents", agentController::create);
+            router.addRoute("PUT", "/api/v1/ai-agents/:id", agentController::update);
+            router.addRoute("DELETE", "/api/v1/ai-agents/:id", agentController::delete);
+        }
+
+        // --- 管理员 API（仅 admin 角色） ---
+        if (isAdmin) {
+            router.addRoute("PUT", "/api/v1/config", configController::updateConfig);
+            router.addRoute("POST", "/api/v1/config/test-models", configController::testModels);
+            router.addRoute("GET", "/api/v1/vdb/bindings", vdbController::bindingGet);
+            router.addRoute("PUT", "/api/v1/vdb/bindings", vdbController::bindingPut);
+            router.addRoute("POST", "/api/v1/vdb", vdbController::create);
+            router.addRoute("DELETE", "/api/v1/vdb/:id", vdbController::delete);
+            router.addRoute("PUT", "/api/v1/vdb/:id/default", vdbController::setDefault);
+            router.addRoute("GET", "/api/v1/vdb/:id/files", vdbController::fileList);
+            router.addRoute("POST", "/api/v1/vdb/:id/upload", vdbController::upload);
+            router.addRoute("GET", "/api/v1/vdb/file/:id/progress", vdbController::processInfo);
+            router.addRoute("GET", "/api/v1/vdb/file/:id/chunks", vdbController::chunks);
+            router.addRoute("GET", "/api/v1/vdb/file/:id/download", vdbController::download);
+            router.addRoute("DELETE", "/api/v1/vdb/file/:id", vdbController::fileDelete);
+            router.addRoute("POST", "/api/v1/faq", faqController::create);
+            router.addRoute("POST", "/api/v1/faq/upload", faqController::upload);
+            router.addRoute("PUT", "/api/v1/faq/:id", faqController::update);
+            router.addRoute("DELETE", "/api/v1/faq/:id", faqController::delete);
+            router.addRoute("DELETE", "/api/v1/faq", faqController::clearAll);
+            router.addRoute("GET", "/api/v1/users", userController::listUsers);
+            router.addRoute("POST", "/api/v1/users", userController::createUser);
+            router.addRoute("DELETE", "/api/v1/users/:name", userController::deleteUser);
+            router.addRoute("PUT", "/api/v1/users/:name/reset-pwd", userController::resetUserPwd);
+            router.addRoute("POST", "/api/v1/workflows", workflowController::create);
+            router.addRoute("PUT", "/api/v1/workflows/:id", workflowController::update);
+            router.addRoute("DELETE", "/api/v1/workflows/:id", workflowController::delete);
+        }
+
+        // --- 用户自助 API（所有角色共享） ---
+        router.addRoute("PUT", "/api/v1/user/password", userController::changePassword);
+        router.addRoute("GET", "/api/v1/user/tokens", userController::listMyTokens);
+        router.addRoute("POST", "/api/v1/user/token", userController::generateToken);
+        router.addRoute("GET", "/api/v1/user/call-logs", userController::myCallLogs);
+
+        // ============================================================
+        // /open_api/ — 第三方专用（Authorization: Bearer <token> 认证）
+        // 始终要求有效 token，不受 sys.api_auth 开关影响
+        // 按 server.role 区分路由（与 /api/v1/ 保持一致）
+        // ============================================================
+
+        // --- 共享读操作（所有角色） ---
+        router.addRoute("GET", "/open_api/me", authController::me);
+        router.addRoute("GET", "/open_api/agents", authController::getOnlineAgents);
+        router.addRoute("GET", "/open_api/workflows", workflowController::listPublic);
+        router.addRoute("GET", "/open_api/workflows/:id", workflowController::get);
+        router.addRoute("GET", "/open_api/config", configController::getConfig);
+        router.addRoute("GET", "/open_api/info", configController::info);
+        router.addRoute("POST", "/open_api/classifier/test", chatController::testClassifier);
+        router.addRoute("GET", "/open_api/ai-agents", agentController::list);
+        router.addRoute("GET", "/open_api/ai-agents/public", agentController::listPublic);
+        router.addRoute("GET", "/open_api/ai-agents/:id", agentController::get);
+        router.addRoute("GET", "/open_api/system-vars", agentController::listSystemVars);
+        router.addRoute("GET", "/open_api/faq", faqController::list);
+        router.addRoute("GET", "/open_api/faq/template", faqController::template);
+        router.addRoute("POST", "/open_api/faq/match", faqController::match);
+        router.addRoute("GET", "/open_api/vdb", vdbController::myList);
+        router.addRoute("GET", "/open_api/vdb/pub", vdbController::pubList);
+        router.addRoute("POST", "/open_api/vdb/search", vdbController::search);
+
+        // --- 聊天 API（仅 chat 角色） ---
         if (isChat) {
             router.addRoute("POST", "/open_api/chat", chatController::chat);
             router.addRoute("POST", "/open_api/chat/sync", chatController::chatSync);
             router.addRoute("GET", "/open_api/chat/history", chatController::history);
             router.addRoute("POST", "/open_api/chat/clear", chatController::clear);
+            router.addRoute("POST", "/open_api/ai-agents", agentController::create);
+            router.addRoute("PUT", "/open_api/ai-agents/:id", agentController::update);
+            router.addRoute("DELETE", "/open_api/ai-agents/:id", agentController::delete);
         }
-        router.addRoute("POST", "/open_api/vdb/search", vdbController::search);
-        router.addRoute("GET", "/open_api/vdb", vdbController::myList);
-        router.addRoute("GET", "/open_api/vdb/pub", vdbController::pubList);
-        router.addRoute("POST", "/open_api/faq/match", faqController::match);
-        router.addRoute("GET", "/open_api/faq", faqController::list);
-        router.addRoute("GET", "/open_api/workflows", workflowController::listPublic);
-        router.addRoute("GET", "/open_api/workflows/:id", workflowController::get);
-        router.addRoute("GET", "/open_api/ai-agents", agentController::list);
-        router.addRoute("GET", "/open_api/ai-agents/:id", agentController::get);
-        router.addRoute("GET", "/open_api/agents", authController::getOnlineAgents);
+
+        // --- 管理员 API（仅 admin 角色） ---
+        if (isAdmin) {
+            router.addRoute("PUT", "/open_api/config", configController::updateConfig);
+            router.addRoute("POST", "/open_api/config/test-models", configController::testModels);
+            router.addRoute("GET", "/open_api/vdb/bindings", vdbController::bindingGet);
+            router.addRoute("PUT", "/open_api/vdb/bindings", vdbController::bindingPut);
+            router.addRoute("POST", "/open_api/vdb", vdbController::create);
+            router.addRoute("DELETE", "/open_api/vdb/:id", vdbController::delete);
+            router.addRoute("PUT", "/open_api/vdb/:id/default", vdbController::setDefault);
+            router.addRoute("GET", "/open_api/vdb/:id/files", vdbController::fileList);
+            router.addRoute("POST", "/open_api/vdb/:id/upload", vdbController::upload);
+            router.addRoute("GET", "/open_api/vdb/file/:id/progress", vdbController::processInfo);
+            router.addRoute("GET", "/open_api/vdb/file/:id/chunks", vdbController::chunks);
+            router.addRoute("GET", "/open_api/vdb/file/:id/download", vdbController::download);
+            router.addRoute("DELETE", "/open_api/vdb/file/:id", vdbController::fileDelete);
+            router.addRoute("POST", "/open_api/faq", faqController::create);
+            router.addRoute("POST", "/open_api/faq/upload", faqController::upload);
+            router.addRoute("PUT", "/open_api/faq/:id", faqController::update);
+            router.addRoute("DELETE", "/open_api/faq/:id", faqController::delete);
+            router.addRoute("DELETE", "/open_api/faq", faqController::clearAll);
+            router.addRoute("GET", "/open_api/users", userController::listUsers);
+            router.addRoute("POST", "/open_api/users", userController::createUser);
+            router.addRoute("DELETE", "/open_api/users/:name", userController::deleteUser);
+            router.addRoute("PUT", "/open_api/users/:name/reset-pwd", userController::resetUserPwd);
+            router.addRoute("POST", "/open_api/workflows", workflowController::create);
+            router.addRoute("PUT", "/open_api/workflows/:id", workflowController::update);
+            router.addRoute("DELETE", "/open_api/workflows/:id", workflowController::delete);
+        }
+
+        // --- 用户自助 API（所有角色共享） ---
+        router.addRoute("PUT", "/open_api/user/password", userController::changePassword);
+        router.addRoute("GET", "/open_api/user/tokens", userController::listMyTokens);
+        router.addRoute("POST", "/open_api/user/token", userController::generateToken);
+        router.addRoute("GET", "/open_api/user/call-logs", userController::myCallLogs);
 
         // 12. Start HTTP server
         HttpServer server = new HttpServer(cfg.getServer().getPort(), router, cfg);

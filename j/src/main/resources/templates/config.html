@@ -1128,7 +1128,7 @@
         // ============================================================
         async function loadConfig() {
             try {
-                const resp = await authFetch('/api/config');
+                const resp = await authFetch('/api/v1/config');
                 const json = await resp.json();
                 const data = json.data;
 
@@ -1236,7 +1236,7 @@
             };
 
             try {
-                const resp = await authFetch('/api/config', {
+                const resp = await authFetch('/api/v1/config', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -1273,7 +1273,7 @@
             };
 
             try {
-                var resp = await authFetch('/api/config/test-models', {
+                var resp = await authFetch('/api/v1/config/test-models', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)
@@ -1326,7 +1326,7 @@
             };
 
             try {
-                const resp = await authFetch('/api/config', {
+                const resp = await authFetch('/api/v1/config', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -1374,7 +1374,7 @@
             };
 
             try {
-                const resp = await authFetch('/api/config', {
+                const resp = await authFetch('/api/v1/config', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -1408,7 +1408,7 @@
 
         async function loadAiAgents() {
             try {
-                const resp = await authFetch('/api/ai-agents');
+                const resp = await authFetch('/api/v1/ai-agents');
                 const json = await resp.json();
                 const agents = json.data || [];
                 const tbody = document.getElementById('aiAgentsTbody');
@@ -1451,7 +1451,7 @@
 
         async function editAgent(id) {
             try {
-                const resp = await authFetch('/api/ai-agents/' + id);
+                const resp = await authFetch('/api/v1/ai-agents/' + id);
                 const json = await resp.json();
                 const a = json.data;
                 document.getElementById('agentEditId').value = a.id;
@@ -1481,7 +1481,7 @@
 
         async function loadVdbChecks(selectedIds) {
             try {
-                const resp = await authFetch('/api/vdb');
+                const resp = await authFetch('/api/v1/vdb');
                 const json = await resp.json();
                 const vdbs = json.data || [];
                 var h = '';
@@ -1519,7 +1519,7 @@
             };
 
             try {
-                var url = id > 0 ? '/api/ai-agents/' + id : '/api/ai-agents';
+                var url = id > 0 ? '/api/v1/ai-agents/' + id : '/api/v1/ai-agents';
                 var method = id > 0 ? 'PUT' : 'POST';
                 var resp = await authFetch(url, {
                     method: method,
@@ -1542,7 +1542,7 @@
         async function delAgent(id) {
             if (!confirm('确定删除该 Agent？')) return;
             try {
-                var resp = await authFetch('/api/ai-agents/' + id, { method: 'DELETE' });
+                var resp = await authFetch('/api/v1/ai-agents/' + id, { method: 'DELETE' });
                 var data = await resp.json();
                 if (data.status === 'ok') {
                     loadAiAgents();
@@ -1560,7 +1560,7 @@
         // ============================================================
         async function loadAgents() {
             try {
-                const resp = await authFetch('/api/agents');
+                const resp = await authFetch('/api/v1/agents');
                 const json = await resp.json();
                 const agents = json.agents || [];
                 const tbody = document.getElementById('agentsTbody');
@@ -1591,7 +1591,7 @@
 
         async function loadUsers() {
             try {
-                const resp = await authFetch('/api/users');
+                const resp = await authFetch('/api/v1/users');
                 const data = await resp.json();
                 const users = data.data || [];
                 document.getElementById('usersTbody').innerHTML = users.map(u =>
@@ -1615,7 +1615,7 @@
             const note = document.getElementById('newUserNote').value.trim();
             if (!userName || !userPwd) { alert('用户名和密码不能为空'); return; }
             try {
-                const resp = await authFetch('/api/users', {
+                const resp = await authFetch('/api/v1/users', {
                     method: 'POST',
                     headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({user_name:userName, user_pwd:userPwd, role, note})
@@ -1633,7 +1633,7 @@
         async function delUser(name) {
             if (!confirm('确定删除用户 "' + name + '" 吗？')) return;
             try {
-                const resp = await authFetch('/api/users/' + encodeURIComponent(name), { method: 'DELETE' });
+                const resp = await authFetch('/api/v1/users/' + encodeURIComponent(name), { method: 'DELETE' });
                 const data = await resp.json();
                 if (data.status === 'ok') loadUsers();
                 else alert(data.error || '删除失败');
@@ -1669,7 +1669,7 @@
                 return;
             }
             try {
-                const resp = await authFetch('/api/users/' + encodeURIComponent(name) + '/reset-pwd', {
+                const resp = await authFetch('/api/v1/users/' + encodeURIComponent(name) + '/reset-pwd', {
                     method: 'PUT',
                     headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({user_pwd: pwd})
@@ -1696,7 +1696,7 @@
 
         async function loadFaqList() {
             try {
-                const resp = await authFetch('/api/faq');
+                const resp = await authFetch('/api/v1/faq');
                 const json = await resp.json();
                 const entries = json.data || [];
                 if (entries.length === 0) {
@@ -1738,7 +1738,7 @@
             const formData = new FormData();
             formData.append('file', file);
 
-            authFetch('/api/faq/upload', { method: 'POST', body: formData })
+            authFetch('/api/v1/faq/upload', { method: 'POST', body: formData })
                 .then(r => r.json())
                 .then(data => {
                     if (data.status === 'ok') {
@@ -1788,7 +1788,7 @@
 
         async function editFaq(id) {
             try {
-                const resp = await authFetch('/api/faq');
+                const resp = await authFetch('/api/v1/faq');
                 const json = await resp.json();
                 const entries = json.data || [];
                 const entry = entries.find(e => e.id === id);
@@ -1816,7 +1816,7 @@
         async function delFaq(id) {
             if (!confirm('确定删除该 FAQ 条目？')) return;
             try {
-                const resp = await authFetch('/api/faq/' + id, { method: 'DELETE' });
+                const resp = await authFetch('/api/v1/faq/' + id, { method: 'DELETE' });
                 const data = await resp.json();
                 if (data.status === 'ok') {
                     showToast('FAQ 已删除', 'success');
@@ -1832,7 +1832,7 @@
         async function clearAllFaq() {
             if (!confirm('确定清空所有 FAQ？此操作不可恢复。')) return;
             try {
-                const resp = await authFetch('/api/faq', { method: 'DELETE' });
+                const resp = await authFetch('/api/v1/faq', { method: 'DELETE' });
                 const data = await resp.json();
                 if (data.status === 'ok') {
                     showToast('FAQ 已全部清空', 'success');
@@ -1848,7 +1848,7 @@
         // FAQ 模板下载（带认证）
         async function downloadFaqTemplate() {
             try {
-                const resp = await authFetch('/api/faq/template');
+                const resp = await authFetch('/api/v1/faq/template');
                 if (!resp.ok) {
                     const err = await resp.json();
                     showToast('下载失败: ' + (err.error || '未知错误'), 'error');
@@ -1886,7 +1886,7 @@
             };
 
             try {
-                const resp = await authFetch('/api/config', {
+                const resp = await authFetch('/api/v1/config', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -1918,7 +1918,7 @@
             if (questions.length === 0) { alert('至少需要一个问法'); return; }
 
             const payload = { questions: questions, answer: answer };
-            const url = id > 0 ? '/api/faq/' + id : '/api/faq';
+            const url = id > 0 ? '/api/v1/faq/' + id : '/api/v1/faq';
             const method = id > 0 ? 'PUT' : 'POST';
 
             try {
@@ -1952,7 +1952,7 @@
         // ============================================================
         async function loadSysWorkflows() {
             try {
-                var resp = await authFetch('/api/workflows');
+                var resp = await authFetch('/api/v1/workflows');
                 var json = await resp.json();
                 var wfs = json.data || [];
                 var sel = document.getElementById('sys_default_workflow');
@@ -1973,7 +1973,7 @@
 
         async function loadWorkflows() {
             try {
-                var resp = await authFetch('/api/workflows');
+                var resp = await authFetch('/api/v1/workflows');
                 var json = await resp.json();
                 var workflows = json.data || [];
                 var sel = document.getElementById('intentWorkflow');
@@ -2002,7 +2002,7 @@
             resultDiv.style.display = 'block';
 
             try {
-                var resp = await authFetch('/api/classifier/test', {
+                var resp = await authFetch('/api/v1/classifier/test', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({workflow_id: workflowId, text: text})
@@ -2072,7 +2072,7 @@
 
         async function loadAgentOptions() {
             try {
-                var resp = await authFetch('/api/ai-agents');
+                var resp = await authFetch('/api/v1/ai-agents');
                 var json = await resp.json();
                 wfEditor.agentList = json.data || [];
             } catch(e) {
@@ -2082,7 +2082,7 @@
 
         async function loadSystemVars() {
             try {
-                var resp = await authFetch('/api/system-vars');
+                var resp = await authFetch('/api/v1/system-vars');
                 var json = await resp.json();
                 wfEditor.systemVars = json.data || [];
             } catch(e) {
@@ -2093,7 +2093,7 @@
 
         async function loadWorkflowList() {
             try {
-                var resp = await authFetch('/api/workflows');
+                var resp = await authFetch('/api/v1/workflows');
                 var json = await resp.json();
                 var wfs = json.data || [];
                 var tbody = document.getElementById('workflowTbody');
@@ -2130,7 +2130,7 @@
 
             if (id > 0) {
                 try {
-                    var resp = await authFetch('/api/workflows/' + id);
+                    var resp = await authFetch('/api/v1/workflows/' + id);
                     var json = await resp.json();
                     var w = json.data;
                     wfEditor.id = w.id;
@@ -2237,10 +2237,10 @@
             };
 
             try {
-                var url = '/api/workflows';
+                var url = '/api/v1/workflows';
                 var method = 'POST';
                 if (wfEditor.id > 0) {
-                    url = '/api/workflows/' + wfEditor.id;
+                    url = '/api/v1/workflows/' + wfEditor.id;
                     method = 'PUT';
                 }
                 var resp = await authFetch(url, {
@@ -2263,7 +2263,7 @@
         async function deleteWorkflow(id) {
             if (!confirm('确定要删除该工作流吗？此操作不可恢复。')) return;
             try {
-                var resp = await authFetch('/api/workflows/' + id, { method: 'DELETE' });
+                var resp = await authFetch('/api/v1/workflows/' + id, { method: 'DELETE' });
                 var json = await resp.json();
                 if (json.status === 'ok') {
                     showToast('工作流已删除', 'success');

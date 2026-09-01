@@ -36,6 +36,15 @@ const (
 // Cookie 名称
 const cookieAuthToken = "auth_token"
 
+// authSourceKey context key 用于区分认证来源
+const authSourceKey = "auth_source"
+
+// authSource 常量
+const (
+	authSourceCookie = "cookie"
+	authSourceBearer = "bearer"
+)
+
 // loginFailRecord 登录失败记录
 type loginFailRecord struct {
 	count       int
@@ -340,19 +349,31 @@ func clearAuthCookie(c *gin.Context) {
 	})
 }
 
-// 浏览器用户：httpOnly Cookie 自动携带
-// API 用户：Authorization: Bearer xxx
-func extractToken(c *gin.Context) string {
-	// 优先从 Cookie 读取（浏览器用户）
-	if token, err := c.Cookie(cookieAuthToken); err == nil && token != "" {
+// 浏览器用户：仅从 httpOnly Cookie 读取 token
+func extractTokenFromCookie(c *gin.Context) string {
+	token, err := c.Cookie(cookieAuthToken)
+	if err == nil && token != "" {
 		return token
 	}
-	// 其次从 Authorization 头读取（API 用户 / 第三方调用）
+	return ""
+}
+
+// 第三方调用：仅从 Authorization: Bearer xxx 读取 token
+func extractTokenFromBearer(c *gin.Context) string {
 	auth := c.GetHeader("Authorization")
 	if strings.HasPrefix(auth, "Bearer ") {
 		return strings.TrimPrefix(auth, "Bearer ")
 	}
 	return ""
+}
+
+// extractToken 兼容旧版：Cookie 优先，Bearer 兜底
+// 用于登出、Me 等需要同时支持两种场景的接口
+func extractToken(c *gin.Context) string {
+	if token := extractTokenFromCookie(c); token != "" {
+		return token
+	}
+	return extractTokenFromBearer(c)
 }
 
 // AuthMiddleware 认证中间件：验证 token
@@ -409,7 +430,65 @@ func (h *AuthHandler) AdminOnlyMiddleware() gin.HandlerFunc {
 	}
 }
 
-// ApiAuthMiddleware API 认证中间件：受 sys.api_auth 开关控制
+// CookieApiAuthMiddleware /api/v1/ 接口认证中间件：仅从 httpOnly Cookie 读取 token
+// 受 sys.api_auth 开关控制：关闭时跳过认证，开启时必须有有效 token
+func (h *AuthHandler) CookieApiAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set(authSourceKey, authSourceCookie)
+
+		tokenStr := extractTokenFromCookie(c)
+		if tokenStr != "" {
+			if user := h.parseToken(tokenStr); user != nil {
+				c.Set("user", user)
+				c.Set("token_str", tokenStr)
+			}
+		}
+
+		// 接口认证关闭时，跳过认证检查
+		if !h.cfg.Sys.ApiAuth {
+			c.Next()
+			return
+		}
+
+		// 接口认证开启时，必须提供有效 token
+		if _, exists := c.Get("user"); !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未认证"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// BearerAuthMiddleware /open_api/ 接口认证中间件：仅从 Authorization: Bearer 头读取 token
+// 作为产品级 API，始终要求有效 token，不受 sys.api_auth 开关影响
+func (h *AuthHandler) BearerAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Set(authSourceKey, authSourceBearer)
+
+		tokenStr := extractTokenFromBearer(c)
+		if tokenStr == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "未提供认证 token，请使用 Authorization: Bearer <token>"})
+			c.Abort()
+			return
+		}
+
+		user := h.parseToken(tokenStr)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "token 无效或已过期"})
+			c.Abort()
+			return
+		}
+
+		c.Set("user", user)
+		c.Set("token_str", tokenStr)
+		c.Next()
+	}
+}
+
+// ApiAuthMiddleware 兼容旧版 API 认证中间件：Cookie 优先，Bearer 兜底
+// 保留给 /api/ 路径（过渡期），受 sys.api_auth 开关控制
 func (h *AuthHandler) ApiAuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 始终尝试从请求中提取 token，设置 user（后续 AdminOnlyMiddleware 等依赖此值）
