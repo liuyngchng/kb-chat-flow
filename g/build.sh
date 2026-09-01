@@ -8,7 +8,7 @@
 #   ./build.sh v1.0.0 --push    # 构建并推送
 #
 # 流程:
-#   1. 本地 (Ubuntu) 静态编译 Go 二进制
+#   1. 本地 (Ubuntu) 静态编译 Go 二进制 (garble 混淆)
 #   2. 打包进 Alpine 运行时镜像
 # ============================================================
 
@@ -74,8 +74,14 @@ cd "$SCRIPT_DIR"
 # 删除旧二进制，防止手动 go build（非 CGO_ENABLED=0）残留的产物混入
 rm -f "$BINARY"
 
-info "本地编译 Go 二进制 (CGO_ENABLED=0)..."
-CGO_ENABLED=0 go build -ldflags="-s -w" -o "$BINARY" .
+# 检查 garble 是否安装
+if ! command -v garble &>/dev/null; then
+    err "garble 未安装，请执行: go install mvdan.cc/garble@latest"
+    exit 1
+fi
+
+info "本地编译 Go 二进制 (CGO_ENABLED=0, garble -literals)..."
+CGO_ENABLED=0 GOGARBLE=kb-chat-flow garble -literals build -o "$BINARY" .
 
 # 自检：确认产物是静态链接
 if ! file "$BINARY" | grep -q "statically linked"; then
