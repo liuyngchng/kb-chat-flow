@@ -1,6 +1,6 @@
 module kb-chat-flow
 
-go 1.25.0
+go 1.24
 
 replace github.com/gin-gonic/gin => /home/rd/workspace/gin
 
@@ -19,6 +19,7 @@ require (
 	golang.org/x/crypto v0.52.0
 	google.golang.org/grpc v1.81.1
 	gopkg.in/yaml.v3 v3.0.1
+	mvdan.cc/garble v0.14.2
 	modernc.org/sqlite v1.40.1
 )
 

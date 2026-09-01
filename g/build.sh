@@ -74,14 +74,8 @@ cd "$SCRIPT_DIR"
 # 删除旧二进制，防止手动 go build（非 CGO_ENABLED=0）残留的产物混入
 rm -f "$BINARY"
 
-# 检查 garble 是否安装
-if ! command -v garble &>/dev/null; then
-    err "garble 未安装，请执行: go install mvdan.cc/garble@latest"
-    exit 1
-fi
-
 info "本地编译 Go 二进制 (CGO_ENABLED=0, garble -literals)..."
-CGO_ENABLED=0 GOGARBLE=kb-chat-flow garble -literals build -o "$BINARY" .
+CGO_ENABLED=0 GOTOOLCHAIN=local GOGARBLE=kb-chat-flow go run mvdan.cc/garble@v0.14.2 -literals build -o "$BINARY" .
 
 # 自检：确认产物是静态链接
 if ! file "$BINARY" | grep -q "statically linked"; then
