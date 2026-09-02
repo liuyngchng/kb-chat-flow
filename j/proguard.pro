@@ -51,6 +51,10 @@
 -dontwarn org.jctools.**
 -dontwarn com.rd.robot.model.**
 
+# Catch-all: suppress warnings for any transitive dependency classes not on the classpath
+# (e.g. org.json, optional dependencies of Jedis/Netty/MinIO etc.)
+-dontwarn **
+
 # ============================================================
 # Keep ALL third-party libraries (never obfuscate)
 # ============================================================
