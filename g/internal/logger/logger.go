@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -50,8 +51,7 @@ func (h *customHandler) Handle(_ context.Context, r slog.Record) error {
 
 	// 3. 源码位置（包路径/文件名:行号，固定宽度右对齐）
 	if r.PC != 0 {
-		src := r.Source()
-		if src != nil {
+		if src := sourceFromPC(r.PC); src != nil {
 			loc := sourceLocation(src)
 			buf = append(buf, ' ')
 			buf = append(buf, '[')
@@ -88,6 +88,20 @@ func (h *customHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		w:     h.w,
 		level: h.level,
 		attrs: append(h.attrs, attrs...),
+	}
+}
+
+// sourceFromPC 从 PC 解析 slog.Source 信息（Go 1.24 兼容，等价于 r.Source()）。
+func sourceFromPC(pc uintptr) *slog.Source {
+	fs := runtime.CallersFrames([]uintptr{pc})
+	f, _ := fs.Next()
+	if f.File == "" {
+		return nil
+	}
+	return &slog.Source{
+		Function: f.Function,
+		File:     f.File,
+		Line:     f.Line,
 	}
 }
 
