@@ -2,9 +2,6 @@
 # ProGuard obfuscation rules for kb-chat-flow
 # ============================================================
 
-# --- JDK target ---
--target 17
-
 # --- Don't shrink (risk of removing reflection-dependent code) ---
 -dontshrink
 

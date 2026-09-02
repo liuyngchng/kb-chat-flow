@@ -217,10 +217,7 @@
                     <libs>
                         <lib>${java.home}/jmods</lib>
                     </libs>
-                    <options>
-                        <option>-target 17</option>
-                    </options>
-                </configuration>
+                                    </configuration>
                 <dependencies>
                     <dependency>
                         <groupId>com.guardsquare</groupId>
