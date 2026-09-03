@@ -100,7 +100,7 @@ func classify(cfg *model.ClassifierDef, userQuery string, llmClient *llm.Client,
 	// 2. 本地模型（~5ms，比关键词准）—— 返回 top-k 候选，保留置信度
 	if ftPredictor != nil {
 		if !ftPredictor.IsTrained() {
-			slog.Warn("fast_text_model_not_found, skipping_fast_text_tier", "path", "dt/ft/model.ftz")
+			slog.Warn("classifier_fasttext_model_not_found", "path", "dt/ft/model.ftz")
 		} else if results := ftPredictor.Predict(userQuery); len(results) > 0 {
 			intents := make([]model.ClassifiedIntent, 0, len(results))
 			for _, r := range results {
@@ -110,7 +110,7 @@ func classify(cfg *model.ClassifierDef, userQuery string, llmClient *llm.Client,
 					Source:     model.SourceFastText,
 				})
 			}
-			slog.Info("classifier_fast_text_matched", "intents", intents, "query", userQuery[:min(50, len(userQuery))])
+			slog.Info("classifier_fasttext_matched", "intents", intents, "query", userQuery[:min(50, len(userQuery))])
 			return intents
 		}
 	}
@@ -132,7 +132,7 @@ func classify(cfg *model.ClassifierDef, userQuery string, llmClient *llm.Client,
 	// 5. 最终 fallback：返回最后一个类别（通常是一般咨询类）
 	if len(cfg.Categories) > 0 {
 		fallback := cfg.Categories[len(cfg.Categories)-1].Name
-		slog.Info("classifier fallback", "intent", fallback, "query", userQuery[:min(50, len(userQuery))])
+		slog.Info("classifier_fallback", "intent", fallback, "query", userQuery[:min(50, len(userQuery))])
 		return []model.ClassifiedIntent{{Intent: fallback, Confidence: confFallback, Source: model.SourceFallback}}
 	}
 
@@ -234,7 +234,7 @@ func matchSemantic(cfg *model.ClassifierDef, userQuery string, embClient *embedd
 	// 获取分类别的归一化向量
 	catVecs, err := getCategoryVectors(cfg, embClient)
 	if err != nil {
-		slog.Warn("semantic classifier: failed to get category vectors", "error", err)
+		slog.Warn("classifier_semantic_get_vectors_failed", "error", err)
 		return "", 0
 	}
 	if len(catVecs) == 0 {
@@ -244,7 +244,7 @@ func matchSemantic(cfg *model.ClassifierDef, userQuery string, embClient *embedd
 	// 计算用户 query 的向量
 	queryVec, err := embClient.EmbedSingle(userQuery)
 	if err != nil {
-		slog.Warn("semantic classifier: failed to embed query", "error", err)
+		slog.Warn("classifier_semantic_embed_query_failed", "error", err)
 		return "", 0
 	}
 
@@ -260,11 +260,11 @@ func matchSemantic(cfg *model.ClassifierDef, userQuery string, embClient *embedd
 	}
 
 	if bestScore >= semanticThreshold {
-		slog.Info("classifier semantic matched", "intent", bestName, "score", bestScore, "query", userQuery[:min(50, len(userQuery))])
+		slog.Info("classifier_semantic_matched", "intent", bestName, "score", bestScore, "query", userQuery[:min(50, len(userQuery))])
 		return bestName, bestScore
 	}
 
-	slog.Info("classifier semantic no match", "best_score", bestScore, "threshold", semanticThreshold)
+	slog.Info("classifier_semantic_no_match", "best_score", bestScore, "threshold", semanticThreshold)
 	return "", bestScore
 }
 
@@ -379,7 +379,7 @@ func llmClassify(cfg *model.ClassifierDef, userQuery string, llmClient *llm.Clie
 
 	result, err := llmClient.Chat(systemPrompt, userMessage)
 	if err != nil {
-		slog.Warn("classifier LLM call failed", "error", err)
+		slog.Warn("classifier_llm_call_failed", "error", err)
 		return ""
 	}
 
@@ -390,17 +390,17 @@ func llmClassify(cfg *model.ClassifierDef, userQuery string, llmClient *llm.Clie
 	// 校验是否在已知类别列表中
 	for _, cat := range cfg.Categories {
 		if strings.EqualFold(name, string(cat.Name)) {
-			slog.Info("classifier LLM matched", "intent", cat.Name)
+			slog.Info("classifier_llm_matched", "intent", cat.Name)
 			return cat.Name
 		}
 		// 检查类别名是否包含在 LLM 输出中（模糊匹配）
 		if strings.Contains(strings.ToLower(result), strings.ToLower(string(cat.Name))) {
-			slog.Info("classifier LLM fuzzy matched", "intent", cat.Name)
+			slog.Info("classifier_llm_fuzzy_matched", "intent", cat.Name)
 			return cat.Name
 		}
 	}
 
-	slog.Warn("classifier LLM returned unknown category", "result", result)
+	slog.Warn("classifier_llm_unknown_category", "result", result)
 	return ""
 }
 

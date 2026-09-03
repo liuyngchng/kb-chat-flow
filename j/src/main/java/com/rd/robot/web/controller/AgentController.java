@@ -100,7 +100,7 @@ public class AgentController {
             // Validate system prompt variable references
             List<String> invalid = TemplateResolver.validateTemplateVars(createReq.getSystemPrompt());
             if (!invalid.isEmpty()) {
-                log.warn("agent system_prompt rejected: invalid variables={}", invalid);
+                log.warn("agent_create_system_prompt_invalid_vars={}", invalid);
                 HttpServer.sendJson(ctx, 400,
                     "{\"error\":\"system_prompt 包含非法的系统变量：" + String.join("、", invalid) + "\"}");
                 return;
@@ -153,7 +153,7 @@ public class AgentController {
             // Validate system prompt variable references
             List<String> invalid = TemplateResolver.validateTemplateVars(updateReq.getSystemPrompt());
             if (!invalid.isEmpty()) {
-                log.warn("agent system_prompt rejected: invalid variables={}", invalid);
+                log.warn("agent_update_system_prompt_invalid_vars={}", invalid);
                 HttpServer.sendJson(ctx, 400,
                     "{\"error\":\"system_prompt 包含非法的系统变量：" + String.join("、", invalid) + "\"}");
                 return;

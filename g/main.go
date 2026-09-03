@@ -44,7 +44,7 @@ func main() {
 	isAdmin := cfg.Server.Role == model.SvcRoleAdmin || cfg.Server.Role == model.SvcRoleAll
 	isChat := cfg.Server.Role == model.SvcRoleChat || cfg.Server.Role == model.SvcRoleAll
 
-	slog.Info("启动对话机器人...", "mode", cfg.Server.Mode, "role", cfg.Server.Role)
+	slog.Info("main_startup_info", "mode", cfg.Server.Mode, "role", cfg.Server.Role)
 
 	// Token 签名密钥校验
 	if cfg.Server.Mode == model.ModeCluster && cfg.Server.TokenSecret == "" {
@@ -55,7 +55,7 @@ func main() {
 		os.Exit(1)
 	}
 	if cfg.Server.TokenSecret == "" {
-		slog.Warn("未配置 server.token_secret，使用默认密钥。生产环境请务必设置自定义密钥！")
+		slog.Warn("main_token_secret_default_warning")
 	}
 
 	// 初始化元数据存储（根据 store.backend 配置选择后端）
@@ -66,10 +66,10 @@ func main() {
 			fmt.Fprintf(os.Stderr, "错误: store.backend=mysql 但 mysql.dsn 为空\n")
 			os.Exit(1)
 		}
-		slog.Info("使用 MySQL 存储")
+		slog.Info("main_using_mysql_store")
 		ms, err := store.NewMySQLStore(cfg.MySQL.DSN)
 		if err != nil {
-			slog.Error("初始化 MySQL 失败", "error", err)
+			slog.Error("main_mysql_init_failed", "error", err)
 			os.Exit(1)
 		}
 		metaStore = ms
@@ -79,10 +79,10 @@ func main() {
 			fmt.Fprintf(os.Stderr, "错误: cfg.db 不存在，请将 cfg.db.template 复制为 cfg.db 后重新启动\n")
 			os.Exit(1)
 		}
-		slog.Info("使用 SQLite 存储")
+		slog.Info("main_using_sqlite_store")
 		ss, err := store.NewSQLiteStore("cfg.db")
 		if err != nil {
-			slog.Error("初始化 SQLite 失败", "error", err)
+			slog.Error("main_sqlite_init_failed", "error", err)
 			os.Exit(1)
 		}
 		metaStore = ss
@@ -91,7 +91,7 @@ func main() {
 
 	// 从 SQLite 加载运行时配置（sys、api），YAML 值作为种子
 	if err := config.LoadRuntimeConfig(metaStore, cfg); err != nil {
-		slog.Error("加载运行时配置失败", "error", err)
+		slog.Error("main_runtime_config_load_failed", "error", err)
 		os.Exit(1)
 	}
 
@@ -107,11 +107,11 @@ func main() {
 	var notifier config.ChangeNotifier
 
 	if cfg.Server.Mode == model.ModeCluster {
-		slog.Info("启动模式: 集群 (cluster)，初始化 Redis 和对象存储...")
+		slog.Info("main_cluster_mode_init")
 		var err error
 		redisClient, err = redisclient.New(cfg)
 		if err != nil {
-			slog.Error("集群模式初始化 Redis 失败", "error", err)
+			slog.Error("main_cluster_redis_init_failed", "error", err)
 			os.Exit(1)
 		}
 		defer redisClient.Close()
@@ -125,7 +125,7 @@ func main() {
 		// 文件存储：S3/MinIO
 		fileStore, err = kb.NewS3FileStore(cfg)
 		if err != nil {
-			slog.Error("集群模式初始化对象存储失败", "error", err)
+			slog.Error("main_cluster_object_store_init_failed", "error", err)
 			os.Exit(1)
 		}
 
@@ -133,7 +133,7 @@ func main() {
 		notifier = config.NewRedisNotifier(redisClient)
 		defer notifier.Stop()
 	} else {
-		slog.Info("启动模式: 单例 (singleton)，使用进程内存 + 本地文件系统")
+		slog.Info("main_singleton_mode_init")
 		// 会话：进程内存 + DB 落盘
 		sessionMgr = session.NewManager(metaStore)
 
@@ -153,7 +153,7 @@ func main() {
 	// 启动后台文档处理 worker（仅 admin 或 all 角色）
 	if isAdmin {
 		go kbManager.StartFileWorker()
-		slog.Info("文件处理 worker 已启动 (admin role)")
+		slog.Info("main_file_worker_started")
 	}
 
 	// 初始化 HTTP 处理器
@@ -163,17 +163,17 @@ func main() {
 	if isChat && !isAdmin {
 		if ch := notifier.SubscribeChanges(); ch != nil {
 			go func() {
-				slog.Info("配置热加载监听已启动")
+				slog.Info("main_config_hot_reload_started")
 				for range ch {
-					slog.Info("收到配置变更通知，重新加载配置...")
+					slog.Info("main_config_change_received")
 					if err := config.ReloadRuntimeConfig(metaStore, cfg); err != nil {
-						slog.Warn("热加载运行时配置失败", "error", err)
+						slog.Warn("main_config_hot_reload_failed", "error", err)
 					}
 					if eng := h.GetEngine(); eng != nil {
 						eng.ReloadVdbBindings()
 					}
 				}
-				slog.Info("配置热加载监听已停止")
+				slog.Info("main_config_hot_reload_stopped")
 			}()
 		}
 	}
@@ -192,7 +192,7 @@ func main() {
 	// 加载 HTML 模板（从 embed.FS）
 	tmpl, err := template.ParseFS(webFS, "web/templates/*")
 	if err != nil {
-		slog.Error("加载模板失败", "error", err)
+		slog.Error("main_template_load_failed", "error", err)
 		os.Exit(1)
 	}
 	r.SetHTMLTemplate(tmpl)
@@ -200,7 +200,7 @@ func main() {
 	// 静态文件（从 embed.FS）
 	staticFS, err := fs.Sub(webFS, "web/static")
 	if err != nil {
-		slog.Error("加载静态文件失败", "error", err)
+		slog.Error("main_static_files_load_failed", "error", err)
 		os.Exit(1)
 	}
 	r.StaticFS("/static", http.FS(staticFS))
@@ -465,7 +465,7 @@ func main() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 		<-sigCh
-		slog.Info("正在关闭服务...")
+		slog.Info("main_shutting_down")
 		kbManager.StopFileWorker()
 		sessionMgr.Stop()
 		if redisClient != nil {
@@ -475,9 +475,9 @@ func main() {
 	}()
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
-	slog.Info("服务启动", "addr", addr, "url", fmt.Sprintf("http://localhost%s", addr))
+	slog.Info("main_server_started", "addr", addr, "url", fmt.Sprintf("http://localhost%s", addr))
 	if err := r.Run(addr); err != nil {
-		slog.Error("服务启动失败", "error", err)
+		slog.Error("main_server_start_failed", "error", err)
 		os.Exit(1)
 	}
 }

@@ -49,14 +49,14 @@ public class QdrantVectorStore implements VectorStore {
             // this.qdrantAvailable = true;
 
             // For now, log the config and use fallback
-            log.info("Qdrant 配置: host={} port={} tls={} collection={}", host, port, useTls, collectionName);
-            log.info("Qdrant 客户端将在生产环境中启用 gRPC 连接");
+            log.info("vdb_qdrant_config host={} port={} tls={} collection={}", host, port, useTls, collectionName);
+            log.info("vdb_qdrant_grpc_notice");
 
             // Fallback to local storage for development
             fs = new LocalVectorStore("./vdb/vectors.db", vdbId);
             this.qdrantAvailable = false;
         } catch (Exception e) {
-            log.warn("Qdrant 初始化失败，回退到本地存储", e);
+            log.warn("vdb_qdrant_init_failed_fallback", e);
             try {
                 fs = new LocalVectorStore("./vdb/vectors.db", vdbId);
             } catch (Exception ex) {
@@ -70,7 +70,7 @@ public class QdrantVectorStore implements VectorStore {
     public void ensureCollection(int dimension) throws Exception {
         if (qdrantAvailable) {
             // In production: call collectionsClient.Create(...)
-            log.info("Qdrant ensureCollection: {} dim={}", collectionName, dimension);
+            log.info("vdb_qdrant_ensure_collection collection={} dim={}", collectionName, dimension);
         } else {
             fallbackStore.ensureCollection(dimension);
         }
@@ -80,7 +80,7 @@ public class QdrantVectorStore implements VectorStore {
     public void insert(List<VectorRecord> records) throws Exception {
         if (qdrantAvailable) {
             // In production: call pointsClient.Upsert(...)
-            log.info("Qdrant insert: {} records={}", collectionName, records.size());
+            log.info("vdb_qdrant_insert collection={} records={}", collectionName, records.size());
         } else {
             fallbackStore.insert(records);
         }
@@ -90,7 +90,7 @@ public class QdrantVectorStore implements VectorStore {
     public List<SearchResult> search(double[] queryVector, int topK, double scoreThreshold) throws Exception {
         if (qdrantAvailable) {
             // In production: call pointsClient.Search(...)
-            log.info("Qdrant search: {} topK={}", collectionName, topK);
+            log.info("vdb_qdrant_search collection={} top_k={}", collectionName, topK);
             return List.of();
         } else {
             return fallbackStore.search(queryVector, topK, scoreThreshold);
@@ -100,7 +100,7 @@ public class QdrantVectorStore implements VectorStore {
     @Override
     public void deleteByIds(List<String> ids) throws Exception {
         if (qdrantAvailable) {
-            log.info("Qdrant deleteByIds: {} ids={}", collectionName, ids.size());
+            log.info("vdb_qdrant_delete_by_ids collection={} ids={}", collectionName, ids.size());
         } else {
             fallbackStore.deleteByIds(ids);
         }
@@ -109,7 +109,7 @@ public class QdrantVectorStore implements VectorStore {
     @Override
     public void deleteBySource(String source) throws Exception {
         if (qdrantAvailable) {
-            log.info("Qdrant deleteBySource: {} source={}", collectionName, source);
+            log.info("vdb_qdrant_delete_by_source collection={} source={}", collectionName, source);
         } else {
             fallbackStore.deleteBySource(source);
         }
@@ -126,7 +126,7 @@ public class QdrantVectorStore implements VectorStore {
     @Override
     public void purge() throws Exception {
         if (qdrantAvailable) {
-            log.info("Qdrant purge: {}", collectionName);
+            log.info("vdb_qdrant_purge collection={}", collectionName);
         } else {
             fallbackStore.purge();
         }

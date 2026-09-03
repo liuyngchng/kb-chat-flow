@@ -553,7 +553,7 @@ func (s *SQLiteStore) seedAdminIfMissing() error {
 	}
 
 	// 随机密码打印到控制台和日志文件
-	slog.Info("首次运行已创建管理员账号", "user_name", "admin", "initial_password", adminPwd, "expires_in", adminPwdExpiry.String())
+	slog.Info("store_sqlite_admin_account_created", "user_name", "admin", "initial_password", adminPwd, "expires_in", adminPwdExpiry.String())
 	fmt.Printf("\n========================================\n")
 	fmt.Printf("  首次运行已创建管理员账号 admin\n")
 	fmt.Printf("  初始密码: %s\n", adminPwd)

@@ -53,7 +53,7 @@ func (s *MemoryStore) GetHistory(uid string) []model.ChatMessage {
 	if s.db != nil {
 		msgs, err := s.db.GetChatMessages(uid, PersistLoadLimit)
 		if err != nil {
-			slog.Warn("从 DB 加载聊天历史失败", "uid", uid, "error", err)
+			slog.Warn("session_memory_load_history_failed", "uid", uid, "error", err)
 			return nil
 		}
 		if len(msgs) > 0 {
@@ -66,7 +66,7 @@ func (s *MemoryStore) GetHistory(uid string) []model.ChatMessage {
 				},
 			}
 			s.sessions.Store(uid, entry)
-			slog.Info("从 DB 恢复聊天历史", "uid", uid, "count", len(msgs))
+			slog.Info("session_memory_restore_history", "uid", uid, "count", len(msgs))
 			return msgs
 		}
 	}
@@ -106,7 +106,7 @@ func (s *MemoryStore) AddMessage(uid, role, content string) {
 	if s.db != nil {
 		go func() {
 			if err := s.db.SaveChatMessage(uid, role, content); err != nil {
-				slog.Warn("持久化聊天消息失败", "uid", uid, "error", err)
+				slog.Warn("session_memory_persist_message_failed", "uid", uid, "error", err)
 			}
 		}()
 	}
@@ -117,7 +117,7 @@ func (s *MemoryStore) Clear(uid string) {
 	s.sessions.Delete(uid)
 	if s.db != nil {
 		if err := s.db.ClearChatMessages(uid); err != nil {
-			slog.Warn("清空 DB 聊天历史失败", "uid", uid, "error", err)
+			slog.Warn("session_memory_clear_history_failed", "uid", uid, "error", err)
 		}
 	}
 }

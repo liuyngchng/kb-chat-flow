@@ -118,7 +118,7 @@ public class AuthController {
             HttpServer.sendJson(ctx, 200, MAPPER.writeValueAsString(resp));
 
         } catch (Exception e) {
-            log.error("登录失败", e);
+            log.error("auth_login_failed", e);
             HttpServer.sendJson(ctx, 500, "{\"error\":\"登录失败: " + e.getMessage() + "\"}");
         }
     }

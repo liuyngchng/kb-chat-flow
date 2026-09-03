@@ -31,7 +31,7 @@ public class RuntimeConfig {
 
         Map<String, String> configs = metaStore.getAllConfigs();
         apply(configs, cfg);
-        log.info("运行时配置加载完成");
+        log.info("runtime_config_loaded");
     }
 
     /**
@@ -40,7 +40,7 @@ public class RuntimeConfig {
     public static void reload(MetaStore metaStore, Config cfg) {
         Map<String, String> configs = metaStore.getAllConfigs();
         apply(configs, cfg);
-        log.info("运行时配置已刷新");
+        log.info("runtime_config_reloaded");
     }
 
     private static void apply(Map<String, String> configs, Config cfg) {

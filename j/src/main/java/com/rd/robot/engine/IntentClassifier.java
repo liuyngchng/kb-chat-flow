@@ -189,16 +189,16 @@ public class IntentClassifier {
         // 2. fastText local model (~5ms)
         if (ftPredictor != null) {
             if (!ftPredictor.isTrained()) {
-                log.warn("fast_text_model_not_found skipping_fast_text_tier path=dt/ft/model.ftz");
+                log.warn("classifier_fasttext_model_not_found");
             } else {
                 FastTextPredictor.Result result = ftPredictor.predict(userQuery);
                 if (result != null) {
                     if (result.confidence() >= FastTextPredictor.CONFIDENCE_THRESHOLD) {
-                        log.info("classifier_fast_text_matched intent={} confidence={} query={}",
+                        log.info("classifier_fasttext_matched intent={} confidence={} query={}",
                                 result.label(), result.confidence(), truncate(userQuery, 50));
                         return result.label();
                     }
-                    log.info("classifier_fast_text_low_confidence label={} confidence={} query={}",
+                    log.info("classifier_fasttext_low_confidence label={} confidence={} query={}",
                             result.label(), result.confidence(), truncate(userQuery, 50));
                 }
             }
@@ -223,7 +223,7 @@ public class IntentClassifier {
         // 5. Final fallback: return the last category
         List<IntentCategory> categories = cfg.getCategories();
         String fallback = categories.get(categories.size() - 1).getName();
-        log.info("classifier fallback intent={} query={}", fallback, truncate(userQuery, 50));
+        log.info("classifier_fallback intent={} query={}", fallback, truncate(userQuery, 50));
         return fallback;
     }
 
@@ -286,7 +286,7 @@ public class IntentClassifier {
         try {
             queryVec = embClient.embedSingle(userQuery);
         } catch (Exception e) {
-            log.warn("semantic classifier: failed to embed query error={}", e.getMessage());
+            log.warn("classifier_semantic_embed_query_failed error={}", e.getMessage());
             return null;
         }
 
@@ -302,12 +302,12 @@ public class IntentClassifier {
         }
 
         if (bestScore >= SEMANTIC_THRESHOLD) {
-            log.info("classifier semantic matched intent={} score={} query={}",
+            log.info("classifier_semantic_matched intent={} score={} query={}",
                     bestName, bestScore, truncate(userQuery, 50));
             return bestName;
         }
 
-        log.info("classifier semantic no match best_score={} threshold={}", bestScore, SEMANTIC_THRESHOLD);
+        log.info("classifier_semantic_no_match best_score={} threshold={}", bestScore, SEMANTIC_THRESHOLD);
         return null;
     }
 
@@ -337,12 +337,12 @@ public class IntentClassifier {
         try {
             embeddings = embClient.embed(catTexts);
         } catch (Exception e) {
-            log.warn("semantic classifier: failed to embed categories error={}", e.getMessage());
+            log.warn("classifier_semantic_embed_categories_failed error={}", e.getMessage());
             return null;
         }
 
         if (embeddings.size() != cfg.getCategories().size()) {
-            log.warn("embedding count mismatch {} vs {}", embeddings.size(), cfg.getCategories().size());
+            log.warn("classifier_embedding_count_mismatch expected={} actual={}", embeddings.size(), cfg.getCategories().size());
             return null;
         }
 
@@ -441,19 +441,19 @@ public class IntentClassifier {
             // Validate against known categories
             for (IntentCategory cat : cfg.getCategories()) {
                 if (name.equalsIgnoreCase(cat.getName())) {
-                    log.info("classifier LLM matched intent={}", cat.getName());
+                    log.info("classifier_llm_matched intent={}", cat.getName());
                     return cat.getName();
                 }
                 // Fuzzy match: check if category name is contained in LLM output
                 if (result.toLowerCase().contains(cat.getName().toLowerCase())) {
-                    log.info("classifier LLM fuzzy matched intent={}", cat.getName());
+                    log.info("classifier_llm_fuzzy_matched intent={}", cat.getName());
                     return cat.getName();
                 }
             }
 
-            log.warn("classifier LLM returned unknown category result={}", result);
+            log.warn("classifier_llm_unknown_category result={}", result);
         } catch (Exception e) {
-            log.warn("classifier LLM call failed", e);
+            log.warn("classifier_llm_call_failed", e);
         }
 
         return null;

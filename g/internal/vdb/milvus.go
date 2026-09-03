@@ -62,7 +62,7 @@ func (s *MilvusStore) EnsureCollection(dimension int) error {
 	}
 
 	if has {
-		slog.Info("Milvus collection 已存在", "name", s.collectionName)
+		slog.Info("vdb_milvus_collection_exists", "name", s.collectionName)
 		return s.cli.LoadCollection(s.ctx, s.collectionName, false)
 	}
 
@@ -101,7 +101,7 @@ func (s *MilvusStore) EnsureCollection(dimension int) error {
 		return fmt.Errorf("创建索引失败: %w", err)
 	}
 
-	slog.Info("Milvus collection 已创建", "name", s.collectionName, "dim", dimension)
+	slog.Info("vdb_milvus_collection_created", "name", s.collectionName, "dim", dimension)
 
 	return s.cli.LoadCollection(s.ctx, s.collectionName, false)
 }
@@ -153,7 +153,7 @@ func (s *MilvusStore) Insert(records []model.VectorRecord) error {
 // Search 向量检索
 func (s *MilvusStore) Search(queryVector []float64, topK int, scoreThreshold float64) ([]model.SearchResult, error) {
 	if err := s.cli.LoadCollection(s.ctx, s.collectionName, false); err != nil {
-		slog.Warn("LoadCollection", "error", err)
+		slog.Warn("vdb_milvus_load_collection_warn", "error", err)
 	}
 
 	// float64 -> float32
@@ -254,7 +254,7 @@ func New(cfg *model.Config, vdbID int64) (VectorStore, error) {
 		if cfg.Milvus.URI == "" {
 			return nil, fmt.Errorf("Milvus URI 未配置")
 		}
-		slog.Info("使用远程 Milvus", "uri", cfg.Milvus.URI, "vdbID", vdbID)
+		slog.Info("vdb_milvus_remote_init", "uri", cfg.Milvus.URI, "vdbID", vdbID)
 		return NewMilvusStore(cfg.Milvus.URI, cfg.Milvus.Token, cfg.Milvus.Username, cfg.Milvus.Password, vdbID)
 
 	case "qdrant":
@@ -264,12 +264,12 @@ func New(cfg *model.Config, vdbID int64) (VectorStore, error) {
 		if cfg.Qdrant.Port == 0 {
 			cfg.Qdrant.Port = 6334
 		}
-		slog.Info("使用 Qdrant 向量存储", "host", cfg.Qdrant.Host, "port", cfg.Qdrant.Port)
+		slog.Info("vdb_qdrant_init", "host", cfg.Qdrant.Host, "port", cfg.Qdrant.Port)
 		return NewQdrantStore(cfg.Qdrant.Host, cfg.Qdrant.Port, cfg.Qdrant.APIKey, cfg.Qdrant.UseTLS, vdbID)
 
 	default:
 		// "local" 或空
-		slog.Info("使用本地向量存储", "vdbID", vdbID)
+		slog.Info("vdb_local_init", "vdbID", vdbID)
 		return NewLocalStore(VectorsDB, vdbID)
 	}
 }

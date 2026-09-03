@@ -90,11 +90,11 @@ func (c *Client) EmbedSingle(text string) ([]float64, error) {
 func (c *Client) Dimension() (int, error) {
 	vec, err := c.EmbedSingle("dimension probe")
 	if err != nil {
-		slog.Error("embedding 维度探测失败", "model", c.ModelName, "baseURL", c.BaseURL, "error", err)
+		slog.Error("embedding_dimension_probe_failed", "model", c.ModelName, "baseURL", c.BaseURL, "error", err)
 		return 0, err
 	}
 	dim := len(vec)
-	slog.Info("embedding 模型探测成功", "model", c.ModelName, "dim", dim)
+	slog.Info("embedding_dimension_probe_success", "model", c.ModelName, "dim", dim)
 	return dim, nil
 }
 
@@ -134,7 +134,7 @@ func (c *Client) embedBatch(texts []string) ([][]float64, error) {
 		if len(bodyStr) > 300 {
 			bodyStr = bodyStr[:300] + "..."
 		}
-		slog.Error("embedding API 返回非 200",
+		slog.Error("embedding_api_non_200_status",
 			"url", url,
 			"model", c.ModelName,
 			"status", resp.StatusCode,

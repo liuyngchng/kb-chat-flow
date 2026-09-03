@@ -76,7 +76,7 @@ public class EmbeddingClient {
     public int dimension() {
         double[] vec = embedSingle("dimension probe");
         int dim = vec.length;
-        log.info("embedding 模型探测 model={} dim={}", modelName, dim);
+        log.info("embedding_dimension_probe_success model={} dim={}", modelName, dim);
         return dim;
     }
 

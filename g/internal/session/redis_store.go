@@ -24,7 +24,7 @@ type RedisStore struct {
 
 // NewRedisStore 创建 Redis 会话存储
 func NewRedisStore(client *redisclient.Client) *RedisStore {
-	slog.Info("session store: using Redis")
+	slog.Info("session_redis_store_init")
 	return &RedisStore{client: client}
 }
 
@@ -36,7 +36,7 @@ func (s *RedisStore) GetHistory(uid string) []model.ChatMessage {
 	key := redisSessionPrefix + uid
 	vals, err := s.client.LRange(ctx, key, 0, int64(MaxMessages)-1)
 	if err != nil {
-		slog.Warn("redis get history failed", "uid", uid, "error", err)
+		slog.Warn("session_redis_get_history_failed", "uid", uid, "error", err)
 		return nil
 	}
 
@@ -49,7 +49,7 @@ func (s *RedisStore) GetHistory(uid string) []model.ChatMessage {
 	for i := len(vals) - 1; i >= 0; i-- {
 		var msg model.ChatMessage
 		if err := json.Unmarshal([]byte(vals[i]), &msg); err != nil {
-			slog.Warn("redis unmarshal message failed", "uid", uid, "error", err)
+			slog.Warn("session_redis_unmarshal_message_failed", "uid", uid, "error", err)
 			continue
 		}
 		messages = append(messages, msg)
@@ -66,7 +66,7 @@ func (s *RedisStore) AddMessage(uid, role, content string) {
 	msg := model.ChatMessage{Role: role, Content: content}
 	data, err := json.Marshal(msg)
 	if err != nil {
-		slog.Warn("redis marshal message failed", "uid", uid, "error", err)
+		slog.Warn("session_redis_marshal_message_failed", "uid", uid, "error", err)
 		return
 	}
 
@@ -74,18 +74,18 @@ func (s *RedisStore) AddMessage(uid, role, content string) {
 
 	// LPUSH: 新消息放到最前面
 	if err := s.client.LPush(ctx, key, string(data)); err != nil {
-		slog.Warn("redis lpush failed", "uid", uid, "error", err)
+		slog.Warn("session_redis_lpush_failed", "uid", uid, "error", err)
 		return
 	}
 
 	// LTRIM: 只保留最近 MaxMessages 条
 	if err := s.client.LTrim(ctx, key, 0, int64(MaxMessages)-1); err != nil {
-		slog.Warn("redis ltrim failed", "uid", uid, "error", err)
+		slog.Warn("session_redis_ltrim_failed", "uid", uid, "error", err)
 	}
 
 	// EXPIRE: 每次写入刷新过期时间
 	if err := s.client.Expire(ctx, key, redisSessionTTL); err != nil {
-		slog.Warn("redis expire failed", "uid", uid, "error", err)
+		slog.Warn("session_redis_expire_failed", "uid", uid, "error", err)
 	}
 }
 
@@ -96,7 +96,7 @@ func (s *RedisStore) Clear(uid string) {
 
 	key := redisSessionPrefix + uid
 	if err := s.client.Del(ctx, key); err != nil {
-		slog.Warn("redis del session failed", "uid", uid, "error", err)
+		slog.Warn("session_redis_del_failed", "uid", uid, "error", err)
 	}
 }
 
@@ -104,7 +104,7 @@ func (s *RedisStore) Clear(uid string) {
 func (s *RedisStore) Stop() {
 	if s.client != nil {
 		if err := s.client.Close(); err != nil {
-			slog.Warn("redis close failed", "error", err)
+			slog.Warn("session_redis_close_failed", "error", err)
 		}
 	}
 }

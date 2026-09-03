@@ -46,7 +46,7 @@ type RedisNotifier struct {
 
 // NewRedisNotifier 创建 Redis 配置通知器
 func NewRedisNotifier(client *redisclient.Client) *RedisNotifier {
-	slog.Info("config notifier: using Redis Pub/Sub")
+	slog.Info("config_notifier_using_redis_pubsub")
 	return &RedisNotifier{
 		client: client,
 		stopCh: make(chan struct{}),
@@ -73,7 +73,7 @@ func (n *RedisNotifier) SubscribeChanges() <-chan struct{} {
 			ctx := context.Background()
 			msgCh, pubsub, err := n.client.Subscribe(ctx, configChangeChannel)
 			if err != nil {
-				slog.Warn("config subscribe failed, retrying in 10s", "error", err)
+				slog.Warn("config_notifier_subscribe_failed_retrying", "error", err)
 				select {
 				case <-n.stopCh:
 					return
@@ -82,20 +82,20 @@ func (n *RedisNotifier) SubscribeChanges() <-chan struct{} {
 				}
 			}
 
-			slog.Info("config change listener started")
+			slog.Info("config_notifier_listener_started")
 
 		innerLoop:
 			for {
 				select {
 				case <-n.stopCh:
 					if err := pubsub.Close(); err != nil {
-						slog.Warn("config pubsub close error", "error", err)
+						slog.Warn("config_notifier_pubsub_close_error", "error", err)
 					}
 					return
 				case msg, ok := <-msgCh:
 					if !ok {
 						// channel closed, reconnect
-						slog.Warn("config subscription lost, reconnecting...")
+						slog.Warn("config_notifier_subscription_lost")
 						break innerLoop
 					}
 					if msg == "reload" {

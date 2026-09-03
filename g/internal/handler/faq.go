@@ -115,7 +115,7 @@ func (h *FaqHandler) Upload(c *gin.Context) {
 	created := 0
 	for _, entry := range entries {
 		if err := h.createFaqEntry(entry.questions, entry.answer, file.Filename); err != nil {
-			slog.Error("创建 FAQ 条目失败", "error", err)
+			slog.Error("faq_upload_create_entry_failed", "error", err)
 			continue
 		}
 		created++
@@ -188,7 +188,7 @@ func (h *FaqHandler) Update(c *gin.Context) {
 		}
 		emb, err := h.embClient.EmbedSingle(q)
 		if err != nil {
-			slog.Warn("FAQ 问题向量化失败", "question", q[:min(30, len(q))], "error", err)
+			slog.Warn("faq_create_question_embed_failed", "question", q[:min(30, len(q))], "error", err)
 			continue
 		}
 		embJSON, err := json.Marshal(emb)
@@ -196,7 +196,7 @@ func (h *FaqHandler) Update(c *gin.Context) {
 			continue
 		}
 		if _, err := h.store.CreateFaqQuestion(id, q, string(embJSON)); err != nil {
-			slog.Error("保存 FAQ 问题失败", "error", err)
+			slog.Error("faq_create_save_question_failed", "error", err)
 		}
 	}
 
@@ -392,18 +392,18 @@ func (h *FaqHandler) createFaqEntry(questions []string, answer, sourceFile strin
 
 		emb, err := h.embClient.EmbedSingle(q)
 		if err != nil {
-			slog.Warn("FAQ 问题向量化失败", "question", q[:min(30, len(q))], "error", err)
+			slog.Warn("faq_update_question_embed_failed", "question", q[:min(30, len(q))], "error", err)
 			continue
 		}
 
 		embJSON, err := json.Marshal(emb)
 		if err != nil {
-			slog.Warn("FAQ 向量序列化失败", "error", err)
+			slog.Warn("faq_embed_serialize_failed", "error", err)
 			continue
 		}
 
 		if _, err := h.store.CreateFaqQuestion(entryID, q, string(embJSON)); err != nil {
-			slog.Error("保存 FAQ 问题失败", "error", err)
+			slog.Error("faq_update_save_question_failed", "error", err)
 		}
 	}
 

@@ -43,7 +43,7 @@ public class MysqlMetaStore implements MetaStore {
         migrate();
         seedUsers();
         seedDefaultAgent();
-        log.info("MySQL 数据库初始化完成");
+        log.info("store_mysql_db_init_done");
     }
 
     private void migrate() {
@@ -220,7 +220,7 @@ public class MysqlMetaStore implements MetaStore {
         }
 
         // 随机密码打印到控制台和日志文件
-        log.info("首次运行已创建管理员账号 user_name=admin initial_password={} expires_in=2h", adminPwd);
+        log.info("store_mysql_admin_account_created user_name=admin initial_password={} expires_in=2h", adminPwd);
         System.out.println("\n========================================");
         System.out.println("  首次运行已创建管理员账号 admin");
         System.out.println("  初始密码: " + adminPwd);
@@ -640,7 +640,7 @@ public class MysqlMetaStore implements MetaStore {
             ps.setString(7, errMsg);
             ps.executeUpdate();
         } catch (SQLException e) {
-            log.error("保存 API 调用日志失败", e);
+            log.error("store_mysql_save_api_call_log_failed", e);
         }
     }
 

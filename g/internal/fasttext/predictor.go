@@ -77,7 +77,7 @@ func (p *Predictor) Train(categories []model.IntentCategory, prompt string) erro
 	modelPath := filepath.Join(p.workDir, "model.ftz")
 	if _, err := os.Stat(modelPath); err == nil {
 		p.modelHash = hashCategories(categories, prompt)
-		slog.Info("fastText model exists, skip training", "model", modelPath, "categories", len(categories))
+		slog.Info("fasttext_model_exists_skip_training", "model", modelPath, "categories", len(categories))
 		return nil
 	}
 
@@ -107,7 +107,7 @@ func (p *Predictor) Train(categories []model.IntentCategory, prompt string) erro
 	}
 
 	p.modelHash = hash
-	slog.Info("fastText model trained", "categories", len(categories), "model", modelPath)
+	slog.Info("fasttext_model_trained", "categories", len(categories), "model", modelPath)
 	return nil
 }
 
@@ -121,7 +121,7 @@ func (p *Predictor) Predict(query string) []Result {
 
 	// 二进制不可用：记录提示并跳过，避免每次预测都报 exec not found
 	if !binaryAvailable() {
-		slog.Warn("fastText predict skipped: fasttext 未安装", "hint", installHint)
+		slog.Warn("fasttext_predict_skipped_not_installed", "hint", installHint)
 		return nil
 	}
 
@@ -135,14 +135,14 @@ func (p *Predictor) Predict(query string) []Result {
 	cmd.Stdin = strings.NewReader(tokens + "\n")
 	output, err := cmd.Output()
 	if err != nil {
-		slog.Warn("fastText predict failed", "error", err, "hint", installHint, "query", query[:min(50, len(query))])
+		slog.Warn("fasttext_predict_failed", "error", err, "hint", installHint, "query", query[:min(50, len(query))])
 		return nil
 	}
 
 	// 解析输出: "__label__xxx 0.999 __label__yyy 0.888"
 	results := parsePredictOutputs(string(output))
 	if len(results) == 0 {
-		slog.Info("fastText all below threshold or none", "query", query[:min(50, len(query))])
+		slog.Info("fasttext_predict_below_threshold", "query", query[:min(50, len(query))])
 	}
 
 	return results

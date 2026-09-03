@@ -81,7 +81,7 @@ public class ConfigController {
             Map<String, Object> resp = Map.of("data", data);
             HttpServer.sendJson(ctx, 200, MAPPER.writeValueAsString(resp));
         } catch (Exception e) {
-            log.error("获取配置失败", e);
+            log.error("config_handler_get_config_failed", e);
             HttpServer.sendError(ctx, io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR, "获取配置失败: " + e.getMessage());
         }
     }
@@ -191,7 +191,7 @@ public class ConfigController {
             HttpServer.sendJson(ctx, 200, "{\"status\":\"ok\"}");
 
         } catch (Exception e) {
-            log.error("更新配置失败", e);
+            log.error("config_handler_update_config_failed", e);
             String errMsg = e.getMessage() != null ? e.getMessage() : "未知错误";
             HttpServer.sendError(ctx, io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR, "更新配置失败: " + errMsg);
         }
@@ -221,7 +221,7 @@ public class ConfigController {
                     results.add(_map("name", "LLM 对话模型", "ok", true, "message", "连接成功", "elapsed_ms", elapsed));
                 } catch (Exception e) {
                     long elapsed = System.currentTimeMillis() - t0;
-                    log.warn("model test: LLM failed error={}", e.getMessage());
+                    log.warn("config_handler_model_test_llm_failed error={}", e.getMessage());
                     results.add(_map("name", "LLM 对话模型", "ok", false, "message", e.getMessage(), "elapsed_ms", elapsed));
                 }
             } else {
@@ -241,7 +241,7 @@ public class ConfigController {
                     results.add(_map("name", "Embedding 向量模型", "ok", true, "message", "连接成功 (dim=" + dim + ")", "elapsed_ms", elapsed));
                 } catch (Exception e) {
                     long elapsed = System.currentTimeMillis() - t0;
-                    log.warn("model test: Embedding failed error={}", e.getMessage());
+                    log.warn("config_handler_model_test_embedding_failed error={}", e.getMessage());
                     results.add(_map("name", "Embedding 向量模型", "ok", false, "message", e.getMessage(), "elapsed_ms", elapsed));
                 }
             } else {
@@ -261,7 +261,7 @@ public class ConfigController {
                     results.add(_map("name", "Rerank 重排序模型", "ok", true, "message", "连接成功", "elapsed_ms", elapsed));
                 } catch (Exception e) {
                     long elapsed = System.currentTimeMillis() - t0;
-                    log.warn("model test: Rerank failed error={}", e.getMessage());
+                    log.warn("config_handler_model_test_rerank_failed error={}", e.getMessage());
                     results.add(_map("name", "Rerank 重排序模型", "ok", false, "message", e.getMessage(), "elapsed_ms", elapsed));
                 }
             } else {
@@ -276,7 +276,7 @@ public class ConfigController {
             HttpServer.sendJson(ctx, 200, MAPPER.writeValueAsString(resp));
 
         } catch (Exception e) {
-            log.error("model test error", e);
+            log.error("config_handler_model_test_error", e);
             HttpServer.sendJson(ctx, 500, "{\"error\":\"模型测试失败: " + e.getMessage() + "\"}");
         }
     }

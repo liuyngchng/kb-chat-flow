@@ -151,7 +151,7 @@ public class VdbController {
 
             sendJson(ctx, 200, Map.of("status", "ok", "file", finfo));
         } catch (Exception e) {
-            log.error("上传文件失败", e);
+            log.error("vdb_upload_file_failed", e);
             sendError(ctx, e.getMessage());
         }
     }
@@ -408,7 +408,7 @@ public class VdbController {
 
             HttpServer.sendJson(ctx, 200, "{\"status\":\"ok\"}");
         } catch (Exception e) {
-            log.error("保存知识库绑定失败", e);
+            log.error("vdb_save_bindings_failed", e);
             HttpServer.sendError(ctx, io.netty.handler.codec.http.HttpResponseStatus.INTERNAL_SERVER_ERROR, "保存绑定失败: " + e.getMessage());
         }
     }

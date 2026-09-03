@@ -38,7 +38,7 @@ public class Bootstrap {
         boolean isAdmin = cfg.getServer().isAdminRole();
         boolean isChat  = cfg.getServer().isChatRole();
 
-        log.info("启动对话机器人... mode={} role={}", cfg.getServer().getMode(), cfg.getServer().getRole());
+        log.info("main_startup_info mode={} role={}", cfg.getServer().getMode(), cfg.getServer().getRole());
 
         // 2. Token 签名密钥校验
         if (cfg.getServer().isClusterMode() && (cfg.getServer().getTokenSecret() == null || cfg.getServer().getTokenSecret().isEmpty())) {
@@ -49,7 +49,7 @@ public class Bootstrap {
             System.exit(1);
         }
         if (cfg.getServer().getTokenSecret() == null || cfg.getServer().getTokenSecret().isEmpty()) {
-            log.warn("未配置 server.token_secret，使用默认密钥。生产环境请务必设置自定义密钥！");
+            log.warn("main_token_secret_default_warning");
         }
 
         // 3. Init token secret (cluster mode needs consistent secret across nodes)
@@ -62,11 +62,11 @@ public class Bootstrap {
 
         // 4. Initialize metadata store
         MetaStore metaStore = createMetaStore(cfg);
-        log.info("数据库初始化完成");
+        log.info("main_db_init_done");
 
         // 5. Load runtime config from DB
         RuntimeConfig.load(metaStore, cfg);
-        log.info("运行时配置加载完成");
+        log.info("main_runtime_config_loaded");
 
         // ============================================================
         // 6. Initialize cluster-mode components (Redis / S3)
@@ -77,7 +77,7 @@ public class Bootstrap {
         SessionManager sessionMgr;
 
         if (cfg.getServer().isClusterMode()) {
-            log.info("启动模式: 集群 (cluster)，初始化 Redis 和对象存储...");
+            log.info("main_cluster_mode_init");
             redisClient = new RedisClient(cfg);
 
             // 会话：Redis 存储
@@ -89,7 +89,7 @@ public class Bootstrap {
             // 文件存储：S3/MinIO
             fileStore = new S3FileStore(cfg);
         } else {
-            log.info("启动模式: 单例 (singleton)，使用进程内存 + 本地文件系统");
+            log.info("main_singleton_mode_init");
 
             // 会话：进程内存 + DB 落盘
             sessionMgr = new SessionManager(metaStore);
@@ -110,7 +110,7 @@ public class Bootstrap {
         // 9. Start background file processing worker (only admin role)
         if (isAdmin) {
             kbManager.startFileWorker();
-            log.info("文件处理 worker 已启动 (admin role)");
+            log.info("main_file_worker_started");
         }
 
         // 10. Create controllers
@@ -304,7 +304,7 @@ public class Bootstrap {
         final RedisClient finalRedis = redisClient;
         final SessionManager finalSessMgr = sessionMgr;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            log.info("正在关闭服务...");
+            log.info("main_shutting_down");
             kbManager.stopFileWorker();
             finalSessMgr.stop();
             if (finalRedis != null) {
@@ -312,10 +312,10 @@ public class Bootstrap {
             }
             server.stop();
             metaStore.close();
-            log.info("服务已关闭");
+            log.info("main_server_stopped");
         }));
 
-        log.info("服务启动: http://localhost:{}", cfg.getServer().getPort());
+        log.info("main_server_started http://localhost:{}", cfg.getServer().getPort());
     }
 
     private static MetaStore createMetaStore(Config cfg) {
@@ -326,7 +326,7 @@ public class Bootstrap {
                 System.err.println("错误: store.backend=mysql 但 mysql.dsn 为空");
                 System.exit(1);
             }
-            log.info("使用 MySQL 存储");
+            log.info("main_using_mysql_store");
             return new MysqlMetaStore(cfg.getMysql().getDsn());
         }
 
@@ -335,7 +335,7 @@ public class Bootstrap {
             System.err.println("错误: cfg.db 不存在，请将 cfg.db.template 复制为 cfg.db 后重新启动");
             System.exit(1);
         }
-        log.info("使用 SQLite 存储");
+        log.info("main_using_sqlite_store");
         return new SqliteMetaStore("cfg.db");
     }
 }

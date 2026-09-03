@@ -77,7 +77,7 @@ public class HttpServer {
                     });
 
             channel = bootstrap.bind(port).sync().channel();
-            log.info("HTTP 服务器已启动端口={}", port);
+            log.info("http_server_started port={}", port);
         } catch (Exception e) {
             throw new RuntimeException("启动 HTTP 服务器失败", e);
         }
@@ -145,7 +145,7 @@ public class HttpServer {
 
                     match.getHandler().handle(ctx, request);
                 } catch (Exception e) {
-                    log.error("处理请求失败 method={} path={}", method, path, e);
+                    log.error("http_server_handle_request_failed method={} path={}", method, path, e);
                     sendError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "内部服务器错误");
                 } finally {
                     PATH_PARAMS.remove();
@@ -159,7 +159,7 @@ public class HttpServer {
 
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            log.error("HTTP 处理异常", cause);
+            log.error("http_server_handle_exception", cause);
             ctx.close();
         }
 

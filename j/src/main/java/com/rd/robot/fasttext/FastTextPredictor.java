@@ -67,7 +67,7 @@ public class FastTextPredictor {
             trainModel(trainPath, modelPath);
 
             this.modelHash = hash;
-            log.info("fastText model trained categories={} model={}", categories.size(), modelPath);
+            log.info("fasttext_model_trained categories={} model={}", categories.size(), modelPath);
         } finally {
             lock.unlock();
         }
@@ -112,7 +112,7 @@ public class FastTextPredictor {
             Result result = parsePredictOutput(output);
             if (result == null || result.label.isEmpty() || "none".equals(result.label)) {
                 if (result != null && "none".equals(result.label)) {
-                    log.info("fastText classified as none (unrelated) confidence={} query={}",
+                    log.info("fasttext_classified_as_none confidence={} query={}",
                             result.confidence, truncate(query, 50));
                 }
                 return null;
@@ -120,7 +120,7 @@ public class FastTextPredictor {
 
             return result;
         } catch (Exception e) {
-            log.warn("fastText predict failed query={} error={}", truncate(query, 50), e.getMessage());
+            log.warn("fasttext_predict_failed query={} error={}", truncate(query, 50), e.getMessage());
             return null;
         } finally {
             lock.unlock();

@@ -133,7 +133,7 @@ public class LlmClient {
                     }
                 }
             } catch (Exception e) {
-                log.error("LLM 请求失败", e);
+                log.error("llm_request_failed", e);
                 onError.accept("请求 LLM 失败: " + e.getMessage());
             }
             onDone.run();

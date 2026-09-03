@@ -207,13 +207,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	var req model.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		slog.Warn("登录参数解析失败", "ip", clientIP, "error", err)
+		slog.Warn("auth_login_parse_failed", "ip", clientIP, "error", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "参数错误: " + err.Error()})
 		return
 	}
 
 	if req.UserName == "" || req.UserPwd == "" {
-		slog.Warn("登录参数为空", "ip", clientIP)
+		slog.Warn("auth_login_params_empty", "ip", clientIP)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "用户名和密码不能为空"})
 		return
 	}
@@ -221,7 +221,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 登录限流：检查是否被锁定
 	h.startBlacklistCleanup()
 	if locked := h.isLoginLocked(clientIP); locked {
-		slog.Warn("登录被限流锁定", "ip", clientIP, "user_name", req.UserName)
+		slog.Warn("auth_login_rate_limited", "ip", clientIP, "user_name", req.UserName)
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": "登录失败次数过多，请稍后再试"})
 		return
 	}
@@ -229,7 +229,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 按用户名查询用户
 	user, err := h.store.GetUserByLogin(req.UserName)
 	if err != nil {
-		slog.Error("登录查询用户失败", "ip", clientIP, "user_name", req.UserName, "error", err)
+		slog.Error("auth_login_query_user_failed", "ip", clientIP, "user_name", req.UserName, "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "登录失败: " + err.Error()})
 		return
 	}
@@ -237,14 +237,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 认证失败统一提示（防用户名枚举），但后端日志区分具体原因
 	if user == nil {
 		h.recordLoginFailure(clientIP)
-		slog.Warn("登录失败：用户不存在", "ip", clientIP, "user_name", req.UserName)
+		slog.Warn("auth_login_user_not_found", "ip", clientIP, "user_name", req.UserName)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
 		return
 	}
 
 	if !store.VerifyPassword(req.UserPwd, user.UserPwd) {
 		h.recordLoginFailure(clientIP)
-		slog.Warn("登录失败：密码错误", "ip", clientIP, "user_name", req.UserName)
+		slog.Warn("auth_login_wrong_password", "ip", clientIP, "user_name", req.UserName)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "用户名或密码错误"})
 		return
 	}
@@ -254,7 +254,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// 检查密码是否过期（仅 SQLite 单机版种子 admin 有此字段）
 	if !user.PwdExpiresAt.IsZero() && time.Now().After(user.PwdExpiresAt) {
-		slog.Warn("登录失败：密码已过期", "ip", clientIP, "user_name", req.UserName)
+		slog.Warn("auth_login_password_expired", "ip", clientIP, "user_name", req.UserName)
 		c.JSON(http.StatusForbidden, gin.H{"error": "密码已过期，请联系管理员重置"})
 		return
 	}
@@ -262,7 +262,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// admin 实例：仅管理员可登录
 	if h.cfg.Server.Role == model.SvcRoleAdmin && user.Role != model.RoleAdmin {
-		slog.Warn("登录失败：非管理员访问管理后台", "ip", clientIP, "user_name", req.UserName, "role", user.Role)
+		slog.Warn("auth_login_non_admin_access", "ip", clientIP, "user_name", req.UserName, "role", user.Role)
 		c.JSON(http.StatusForbidden, gin.H{"error": "此账号无法访问管理后台"})
 		return
 	}
@@ -278,7 +278,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		h.presence.SetPresence(user.UserName, time.Now())
 	}
 
-	slog.Info("登录成功", "ip", clientIP, "user_name", user.UserName, "role", user.Role)
+	slog.Info("auth_login_success", "ip", clientIP, "user_name", user.UserName, "role", user.Role)
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":          "ok",

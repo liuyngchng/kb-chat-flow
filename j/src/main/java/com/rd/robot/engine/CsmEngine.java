@@ -118,7 +118,7 @@ public class CsmEngine {
             try {
                 csmRun(eventQueue, userQuery, uid, messages.size());
             } catch (Exception e) {
-                log.error("csm execution error", e);
+                log.error("csm_execution_error", e);
                 eventQueue.offer(new EngineEvent("error", "CSM 执行失败: " + e.getMessage()));
             }
         }).start();
@@ -136,7 +136,7 @@ public class CsmEngine {
         try {
             ftPredictor.train(CSM_CLASSIFIER.getCategories(), CSM_CLASSIFIER.getPrompt());
         } catch (Exception e) {
-            log.warn("fastText train failed, will skip fastText tier: {}", e.getMessage());
+            log.warn("csm_fasttext_train_failed {}", e.getMessage());
         }
         long classifyStart = System.currentTimeMillis();
         String intent = IntentClassifier.classify(
@@ -268,7 +268,7 @@ public class CsmEngine {
             if (ids == null || ids.isEmpty()) return DEFAULT_VDB_IDS;
             return ids;
         } catch (Exception e) {
-            log.warn("csm vdb binding parse failed, using defaults: key={} error={}", key, e.getMessage());
+            log.warn("csm_vdb_binding_parse_failed key={} error={}", key, e.getMessage());
             return DEFAULT_VDB_IDS;
         }
     }

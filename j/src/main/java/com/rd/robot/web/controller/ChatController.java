@@ -83,7 +83,7 @@ public class ChatController {
                 default: chatSyncWithKB(ctx, req, uid);
             }
         } catch (Exception e) {
-            log.error("chatSync error", e);
+            log.error("chat_sync_error", e);
             HttpServer.sendJson(ctx, 500, "{\"error\":\"聊天请求失败: " + e.getMessage() + "\"}");
         }
     }
@@ -125,7 +125,7 @@ public class ChatController {
             resp.put("source", "kb");
             HttpServer.sendJson(ctx, 200, MAPPER.writeValueAsString(resp));
         } catch (Exception e) {
-            log.error("chat sync kb error", e);
+            log.error("chat_sync_kb_error", e);
             HttpServer.sendJson(ctx, 500, "{\"error\":\"" + e.getMessage() + "\"}");
         }
     }
@@ -154,7 +154,7 @@ public class ChatController {
             resp.put("source", "csm");
             HttpServer.sendJson(ctx, 200, MAPPER.writeValueAsString(resp));
         } catch (Exception e) {
-            log.error("chat sync csm error", e);
+            log.error("chat_sync_csm_error", e);
             HttpServer.sendJson(ctx, 500, "{\"error\":\"" + e.getMessage() + "\"}");
         }
     }
@@ -176,7 +176,7 @@ public class ChatController {
             resp.put("source", "dynamic");
             HttpServer.sendJson(ctx, 200, MAPPER.writeValueAsString(resp));
         } catch (Exception e) {
-            log.error("chat sync dynamic error", e);
+            log.error("chat_sync_dynamic_error", e);
             HttpServer.sendJson(ctx, 500, "{\"error\":\"" + e.getMessage() + "\"}");
         }
     }
@@ -237,7 +237,7 @@ public class ChatController {
             }
 
         } catch (Exception e) {
-            log.error("chat error", e);
+            log.error("chat_error", e);
             HttpServer.sendJson(ctx, 500, "{\"error\":\"聊天请求失败: " + e.getMessage() + "\"}");
         }
     }
@@ -256,7 +256,7 @@ public class ChatController {
             try {
                 FaqController.FaqMatchResult faqResult = faqController.matchFaq(req.getMsg(), faqThreshold);
                 if (faqResult != null) {
-                    log.info("faq-matched uid={} query={} score={}",
+                    log.info("chat_faq_matched uid={} query={} score={}",
                             uid, truncate(req.getMsg(), 50), faqResult.score());
                     sessionMgr.addMessage(uid, "user", req.getMsg());
                     ctx.writeAndFlush(new DefaultHttpContent(
@@ -271,7 +271,7 @@ public class ChatController {
                     return;
                 }
             } catch (Exception e) {
-                log.warn("FAQ 匹配失败", e);
+                log.warn("chat_faq_match_failed", e);
             }
         }
 
@@ -287,7 +287,7 @@ public class ChatController {
         String promptTemplate = getPromptTemplate();
         String systemPrompt = buildPrompt(promptTemplate, contextStr, historyStr, req.getMsg(), curDate, curWeek);
 
-        log.info("chat uid={} query={} contextLen={}",
+        log.info("chat_kb_start uid={} query={} context_len={}",
                 uid, truncate(req.getMsg(), 50), contextStr.length());
 
         // Save user message
@@ -307,7 +307,7 @@ public class ChatController {
                             Unpooled.copiedBuffer("data: " + chunk + "\n\n", CharsetUtil.UTF_8)));
                 },
                 error -> {
-                    log.error("LLM 错误 error={}", error);
+                    log.error("chat_llm_error error={}", error);
                     ctx.writeAndFlush(new DefaultHttpContent(
                             Unpooled.copiedBuffer("data: [错误] " + error + "\n\n", CharsetUtil.UTF_8)));
                 },
@@ -336,7 +336,7 @@ public class ChatController {
 
         sessionMgr.addMessage(uid, "user", req.getMsg());
 
-        log.info("workflow-chat-csm uid={} query={}",
+        log.info("chat_workflow_csm_start uid={} query={}",
                 uid, truncate(req.getMsg(), 50));
 
         ctx.writeAndFlush(new DefaultHttpContent(
@@ -365,7 +365,7 @@ public class ChatController {
                                     "data: " + evt.getContent() + "\n\n", CharsetUtil.UTF_8)));
                             break;
                         case "error":
-                            log.error("workflow error error={}", evt.getContent());
+                            log.error("chat_workflow_csm_error error={}", evt.getContent());
                             ctx.writeAndFlush(new DefaultHttpContent(Unpooled.copiedBuffer(
                                     "data: [错误] " + evt.getContent() + "\n\n", CharsetUtil.UTF_8)));
                             break;
@@ -384,7 +384,7 @@ public class ChatController {
                     }
                 }
             } catch (Exception e) {
-                log.error("workflow event processing error", e);
+                log.error("chat_workflow_csm_processing_error", e);
             }
         }).start();
     }
@@ -401,7 +401,7 @@ public class ChatController {
         sessionMgr.addMessage(uid, "user", req.getMsg());
 
         long workflowId = cfg.getSys().getDefaultWorkflowId();
-        log.info("workflow-chat-dynamic uid={} workflow={} query={}",
+        log.info("chat_workflow_dynamic_start uid={} workflow={} query={}",
                 uid, workflowId, truncate(req.getMsg(), 50));
 
         ctx.writeAndFlush(new DefaultHttpContent(
@@ -427,7 +427,7 @@ public class ChatController {
                                     "data: " + evt.getContent() + "\n\n", CharsetUtil.UTF_8)));
                             break;
                         case "error":
-                            log.error("workflow error error={}", evt.getContent());
+                            log.error("chat_workflow_dynamic_error error={}", evt.getContent());
                             ctx.writeAndFlush(new DefaultHttpContent(Unpooled.copiedBuffer(
                                     "data: [错误] " + evt.getContent() + "\n\n", CharsetUtil.UTF_8)));
                             break;
@@ -446,7 +446,7 @@ public class ChatController {
                     }
                 }
             } catch (Exception e) {
-                log.error("workflow event processing error", e);
+                log.error("chat_workflow_dynamic_processing_error", e);
             }
         }).start();
     }
@@ -519,7 +519,7 @@ public class ChatController {
                         workflow.getClassifier().getCategories(),
                         workflow.getClassifier().getPrompt());
             } catch (Exception e) {
-                log.warn("fastText train failed for test: {}", e.getMessage());
+                log.warn("chat_classifier_test_fasttext_train_failed {}", e.getMessage());
             }
 
             // Execute classification with details
@@ -551,7 +551,7 @@ public class ChatController {
 
             HttpServer.sendJson(ctx, 200, MAPPER.writeValueAsString(result));
         } catch (Exception e) {
-            log.error("classifier test error", e);
+            log.error("chat_classifier_test_error", e);
             HttpServer.sendJson(ctx, 500, "{\"error\":\"分类测试失败: " + e.getMessage() + "\"}");
         }
     }

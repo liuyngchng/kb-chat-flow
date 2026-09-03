@@ -122,7 +122,7 @@ func (e *Engine) csmRun(eventCh chan<- EngineEvent, userQuery, uid string, histo
 
 	// 1. 意图分类（复用 engine.classify，多级匹配：关键词 → fastText → 语义 → LLM → fallback）
 	if err := e.ftPredictor.Train(csmClassifier.Categories, csmClassifier.Prompt); err != nil {
-		slog.Warn("fastText train failed, will skip fastText tier", "error", err)
+		slog.Warn("csm_fasttext_train_failed", "error", err)
 	}
 	classifyStart := time.Now()
 	classified := classify(csmClassifier, userQuery, e.baseLLM, e.embClient, e.ftPredictor)
@@ -142,11 +142,11 @@ func (e *Engine) csmRun(eventCh chan<- EngineEvent, userQuery, uid string, histo
 		classified[0].Confidence-classified[1].Confidence < ambiguityGap &&
 		!(classified[0].Source == model.SourceKeyword && classified[1].Source == model.SourceKeyword) {
 
-		slog.Info("csm_classify_done", "intents", classified, "ambiguous", true, "duration_ms", time.Since(classifyStart).Milliseconds(), "query", truncateStr(userQuery, 80))
+		slog.Info("csm_classify_done_ambiguous", "intents", classified, "ambiguous", true, "duration_ms", time.Since(classifyStart).Milliseconds(), "query", truncateStr(userQuery, 80))
 		eventCh <- EngineEvent{Type: "progress", Step: 0, Total: csmTotalStep, Agent: "意图确认"}
 		eventCh <- EngineEvent{Type: "chunk", Content: csmClarifyText(classified[:2]), Step: 2, Total: csmTotalStep}
 		eventCh <- EngineEvent{Type: "done", Total: csmTotalStep}
-		slog.Info("csm_run_done", "intent", "ambiguous", "total_ms", time.Since(runStart).Milliseconds())
+		slog.Info("csm_run_done_ambiguous", "intent", "ambiguous", "total_ms", time.Since(runStart).Milliseconds())
 		return
 	}
 
@@ -449,7 +449,7 @@ func (e *Engine) loadVdbIDs(key string) []int64 {
 	}
 	var ids []int64
 	if err := json.Unmarshal([]byte(val), &ids); err != nil || len(ids) == 0 {
-		slog.Warn("csm vdb binding 解析失败，使用默认值", "key", key, "val", val, "error", err)
+		slog.Warn("csm_vdb_binding_parse_failed", "key", key, "val", val, "error", err)
 		return defaultVdbIDs
 	}
 	return ids
