@@ -1,20 +1,42 @@
-# kb-chat-flow API 接口文档
-
-
+# kb-chat-flow 第三方系统 API 接口文档
 
 ## 概述
 
-- **Base URL**: `<HOST>/api/`
+- **Base URL**: `<HOST>/open_api/`
 - **Content-Type**: `application/json`
-- **认证**: `Authorization: Bearer <TOKEN>`
+- **认证**: `Authorization: Bearer <TOKEN>`（**始终强制**，不受 `sys.api_auth` 开关影响）
 - **成功**: `{"data": ...}` 或 `{"status": "ok"}`
 - **失败**: `{"error": "..."}`
+
+> `/open_api/` 是面向第三方系统的专用 API 前缀。前端页面使用 `/api/v1/`（Cookie 认证），两者路由结构相同但认证方式不同。
+
+### 获取 Token
+
+通过公开的登录接口获取 Bearer Token（见下方「认证」章节），然后在请求中携带：
+
+```bash
+curl <HOST>/open_api/me -H "Authorization: Bearer <TOKEN>"
+```
+
+### 服务角色路由
+
+服务启动时根据 `server.role` 配置注册不同路由：
+
+| role | 可用端点 |
+|------|---------|
+| `chat` | 所有读操作 + 聊天 + Agent 写操作 |
+| `admin` | 所有读操作 + 管理写操作（配置/用户/FAQ/工作流/VDB） |
+| `all` | chat + admin 全部 |
+
+> 读操作（GET 类 + 部分 POST）在所有角色下均可用。
 
 ---
 
 ## 1. 认证
 
 ### 登录
+
+`POST /api/login`（公开，无需认证）
 
 ```bash
 curl -X POST <HOST>/api/login \
@@ -26,9 +48,11 @@ curl -X POST <HOST>/api/login \
 {"status":"ok","token":"eyJ...","user_name":"admin","role":1}
 ```
 
+> 返回的 `token` 用于后续 `/open_api/*` 请求的 `Authorization: Bearer` 头。
+
 ### 登出
 
-`POST /api/logout`
+`POST /api/logout`（公开，无需认证）
 
 ```bash
 curl -X POST <HOST>/api/logout \
@@ -39,12 +63,26 @@ curl -X POST <HOST>/api/logout \
 {"status":"ok"}
 ```
 
-### 获取当前用户
+### 注册
 
-`GET /api/me`
+`POST /api/register`（公开，无需认证）
 
 ```bash
-curl <HOST>/api/me -H "Authorization: Bearer <TOKEN>"
+curl -X POST <HOST>/api/register \
+  -H "Content-Type: application/json" \
+  -d '{"user_name":"new_user","user_pwd":"123456"}'
+```
+
+```json
+{"status":"ok"}
+```
+
+### 获取当前用户
+
+`GET /open_api/me`
+
+```bash
+curl <HOST>/open_api/me -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -53,10 +91,10 @@ curl <HOST>/api/me -H "Authorization: Bearer <TOKEN>"
 
 ### 查询在线座席
 
-`GET /api/agents`
+`GET /open_api/agents`
 
 ```bash
-curl <HOST>/api/agents -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/agents -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -69,12 +107,12 @@ curl <HOST>/api/agents -H "Authorization: Bearer <TOKEN>"
 
 ### 发送消息（SSE 流式）
 
-`POST /api/chat`
+`POST /open_api/chat`
 
 根据 `sys.work_mode` 自动路由：`0`=知识库问答，`1`=CSM 硬编码工作流，`2`=动态工作流。
 
 ```bash
-curl -X POST <HOST>/api/chat \
+curl -X POST <HOST>/open_api/chat \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"msg":"你好，请问营业时间？"}'
@@ -91,18 +129,18 @@ data: [DONE]                   ← 结束
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | msg | string | ✅ | 用户消息 |
-| uid | string |   | 会话标识；当 `api_auth=false` 时生效，可管理多会话 |
+| uid | string |   | 会话标识；`/open_api` 下**强制使用 token 中的用户名**，不接受请求体中的 uid |
 
-> **UID 行为**：`api_auth=true` 时强制使用 token 解析的 uid；`api_auth=false` 时优先使用请求中的 `uid`，未传则 fallback 为 token uid。
+> **UID 行为**：`/open_api` 始终使用 token 中解析出的用户名作为 uid，请求体中的 `uid` 字段会被忽略。
 
 ### 发送消息（同步/非流式）
 
-`POST /api/chat/sync`
+`POST /open_api/chat/sync`
 
 与流式接口共享同一套工作模式路由逻辑，返回 JSON 而非 SSE。
 
 ```bash
-curl -X POST <HOST>/api/chat/sync \
+curl -X POST <HOST>/open_api/chat/sync \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"msg":"你好，请问营业时间？"}'
@@ -120,10 +158,10 @@ curl -X POST <HOST>/api/chat/sync \
 
 ### 查询历史
 
-`GET /api/chat/history`
+`GET /open_api/chat/history`
 
 ```bash
-curl <HOST>/api/chat/history -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/chat/history -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -134,10 +172,10 @@ curl <HOST>/api/chat/history -H "Authorization: Bearer <TOKEN>"
 
 ### 清空会话
 
-`POST /api/chat/clear`
+`POST /open_api/chat/clear`
 
 ```bash
-curl -X POST <HOST>/api/chat/clear \
+curl -X POST <HOST>/open_api/chat/clear \
   -H "Authorization: Bearer <TOKEN>"
 ```
 
@@ -165,10 +203,10 @@ curl <HOST>/health
 
 ### 服务信息
 
-`GET /api/info`
+`GET /open_api/info`
 
 ```bash
-curl <HOST>/api/info -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/info -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -189,10 +227,10 @@ curl <HOST>/api/info -H "Authorization: Bearer <TOKEN>"
 
 ### 获取配置
 
-`GET /api/config`
+`GET /open_api/config`
 
 ```bash
-curl <HOST>/api/config -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/config -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -210,10 +248,10 @@ curl <HOST>/api/config -H "Authorization: Bearer <TOKEN>"
 
 ### 更新配置
 
-`PUT /api/config` ⚠️ 仅管理员
+`PUT /open_api/config` ⚠️ 仅管理员
 
 ```bash
-curl -X PUT <HOST>/api/config \
+curl -X PUT <HOST>/open_api/config \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -234,10 +272,10 @@ curl -X PUT <HOST>/api/config \
 
 ### 测试模型连接
 
-`POST /api/config/test-models` ⚠️ 仅管理员
+`POST /open_api/config/test-models` ⚠️ 仅管理员
 
 ```bash
-curl -X POST <HOST>/api/config/test-models \
+curl -X POST <HOST>/open_api/config/test-models \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -270,10 +308,10 @@ curl -X POST <HOST>/api/config/test-models \
 
 ### 查询我的知识库
 
-`GET /api/vdb`
+`GET /open_api/vdb`
 
 ```bash
-curl <HOST>/api/vdb -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/vdb -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -282,18 +320,18 @@ curl <HOST>/api/vdb -H "Authorization: Bearer <TOKEN>"
 
 ### 查询公共知识库
 
-`GET /api/vdb/pub`
+`GET /open_api/vdb/pub`
 
 ```bash
-curl <HOST>/api/vdb/pub -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/vdb/pub -H "Authorization: Bearer <TOKEN>"
 ```
 
 ### 创建知识库
 
-`POST /api/vdb`
+`POST /open_api/vdb` ⚠️ 仅管理员
 
 ```bash
-curl -X POST <HOST>/api/vdb \
+curl -X POST <HOST>/open_api/vdb \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"name":"新知识库","is_public":false}'
@@ -305,10 +343,10 @@ curl -X POST <HOST>/api/vdb \
 
 ### 删除知识库
 
-`DELETE /api/vdb/:id`
+`DELETE /open_api/vdb/:id` ⚠️ 仅管理员
 
 ```bash
-curl -X DELETE <HOST>/api/vdb/3 -H "Authorization: Bearer <TOKEN>"
+curl -X DELETE <HOST>/open_api/vdb/3 -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -317,10 +355,10 @@ curl -X DELETE <HOST>/api/vdb/3 -H "Authorization: Bearer <TOKEN>"
 
 ### 设为默认
 
-`PUT /api/vdb/:id/default`
+`PUT /open_api/vdb/:id/default` ⚠️ 仅管理员
 
 ```bash
-curl -X PUT <HOST>/api/vdb/1/default -H "Authorization: Bearer <TOKEN>"
+curl -X PUT <HOST>/open_api/vdb/1/default -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -329,10 +367,10 @@ curl -X PUT <HOST>/api/vdb/1/default -H "Authorization: Bearer <TOKEN>"
 
 ### 查询文件列表
 
-`GET /api/vdb/:id/files`
+`GET /open_api/vdb/:id/files` ⚠️ 仅管理员
 
 ```bash
-curl <HOST>/api/vdb/1/files -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/vdb/1/files -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -341,10 +379,10 @@ curl <HOST>/api/vdb/1/files -H "Authorization: Bearer <TOKEN>"
 
 ### 上传文件
 
-`POST /api/vdb/:id/upload`
+`POST /open_api/vdb/:id/upload` ⚠️ 仅管理员
 
 ```bash
-curl -X POST <HOST>/api/vdb/1/upload \
+curl -X POST <HOST>/open_api/vdb/1/upload \
   -H "Authorization: Bearer <TOKEN>" \
   -F "file=@/path/to/faq.txt"
 ```
@@ -357,14 +395,14 @@ curl -X POST <HOST>/api/vdb/1/upload \
 
 ### 搜索知识库
 
-`POST /api/vdb/search`
+`POST /open_api/vdb/search`
 
 支持三种搜索模式：
 
 **模式 1 — 搜索多个知识库**（推荐）：
 
 ```bash
-curl -X POST <HOST>/api/vdb/search \
+curl -X POST <HOST>/open_api/vdb/search \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"query":"燃气费怎么算","vdb_ids":[1,2]}'
@@ -373,7 +411,7 @@ curl -X POST <HOST>/api/vdb/search \
 **模式 2 — 搜索单个知识库**（兼容旧版）：
 
 ```bash
-curl -X POST <HOST>/api/vdb/search \
+curl -X POST <HOST>/open_api/vdb/search \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"query":"燃气费怎么算","vdb_id":1}'
@@ -382,7 +420,7 @@ curl -X POST <HOST>/api/vdb/search \
 **模式 3 — 不指定知识库，搜索所有可访问的**：
 
 ```bash
-curl -X POST <HOST>/api/vdb/search \
+curl -X POST <HOST>/open_api/vdb/search \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"query":"燃气费怎么算"}'
@@ -402,10 +440,10 @@ curl -X POST <HOST>/api/vdb/search \
 
 ### 查询处理进度
 
-`GET /api/vdb/file/:id/progress`
+`GET /open_api/vdb/file/:id/progress` ⚠️ 仅管理员
 
 ```bash
-curl <HOST>/api/vdb/file/1/progress -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/vdb/file/1/progress -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -414,10 +452,10 @@ curl <HOST>/api/vdb/file/1/progress -H "Authorization: Bearer <TOKEN>"
 
 ### 删除文件
 
-`DELETE /api/vdb/file/:id`
+`DELETE /open_api/vdb/file/:id` ⚠️ 仅管理员
 
 ```bash
-curl -X DELETE <HOST>/api/vdb/file/1 -H "Authorization: Bearer <TOKEN>"
+curl -X DELETE <HOST>/open_api/vdb/file/1 -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -426,22 +464,22 @@ curl -X DELETE <HOST>/api/vdb/file/1 -H "Authorization: Bearer <TOKEN>"
 
 ### 下载文件
 
-`GET /api/vdb/file/:id/download`
+`GET /open_api/vdb/file/:id/download` ⚠️ 仅管理员
 
 ```bash
-curl <HOST>/api/vdb/file/1/download -H "Authorization: Bearer <TOKEN>" -o myfile.txt
+curl <HOST>/open_api/vdb/file/1/download -H "Authorization: Bearer <TOKEN>" -o myfile.txt
 ```
 
 > 仅文件上传者可下载。
 
 ### 查询文件分块
 
-`GET /api/vdb/file/:id/chunks`
+`GET /open_api/vdb/file/:id/chunks` ⚠️ 仅管理员
 
 查看文档被切分和向量化后的所有文本块。
 
 ```bash
-curl <HOST>/api/vdb/file/1/chunks -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/vdb/file/1/chunks -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -452,10 +490,10 @@ curl <HOST>/api/vdb/file/1/chunks -H "Authorization: Bearer <TOKEN>"
 
 ### 查询知识库绑定
 
-`GET /api/vdb/bindings` ⚠️ 仅管理员
+`GET /open_api/vdb/bindings` ⚠️ 仅管理员
 
 ```bash
-curl <HOST>/api/vdb/bindings -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/vdb/bindings -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -464,10 +502,10 @@ curl <HOST>/api/vdb/bindings -H "Authorization: Bearer <TOKEN>"
 
 ### 保存知识库绑定
 
-`PUT /api/vdb/bindings` ⚠️ 仅管理员
+`PUT /open_api/vdb/bindings` ⚠️ 仅管理员
 
 ```bash
-curl -X PUT <HOST>/api/vdb/bindings \
+curl -X PUT <HOST>/open_api/vdb/bindings \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"billing":[1,2],"repair":[3],"faq":[1,3]}'
@@ -485,10 +523,10 @@ curl -X PUT <HOST>/api/vdb/bindings \
 
 ### 查询 FAQ 列表
 
-`GET /api/faq`
+`GET /open_api/faq`
 
 ```bash
-curl <HOST>/api/faq -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/faq -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -505,12 +543,12 @@ curl <HOST>/api/faq -H "Authorization: Bearer <TOKEN>"
 
 ### FAQ 匹配
 
-`POST /api/faq/match`
+`POST /open_api/faq/match`
 
 独立匹配接口，不经过 LLM，直接返回最匹配的 FAQ 答案。
 
 ```bash
-curl -X POST <HOST>/api/faq/match \
+curl -X POST <HOST>/open_api/faq/match \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"query":"营业时间"}'
@@ -528,18 +566,18 @@ curl -X POST <HOST>/api/faq/match \
 
 ### 下载 FAQ 模板
 
-`GET /api/faq/template`
+`GET /open_api/faq/template`
 
 ```bash
-curl <HOST>/api/faq/template -H "Authorization: Bearer <TOKEN>" -o faq_template.txt
+curl <HOST>/open_api/faq/template -H "Authorization: Bearer <TOKEN>" -o faq_template.txt
 ```
 
 ### 创建 FAQ
 
-`POST /api/faq` ⚠️ 仅管理员
+`POST /open_api/faq` ⚠️ 仅管理员
 
 ```bash
-curl -X POST <HOST>/api/faq \
+curl -X POST <HOST>/open_api/faq \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"answer":"营业时间周一至周五 8:00-18:00","questions":["营业时间","几点开门"]}'
@@ -551,10 +589,10 @@ curl -X POST <HOST>/api/faq \
 
 ### 上传 FAQ 文件
 
-`POST /api/faq/upload` ⚠️ 仅管理员
+`POST /open_api/faq/upload` ⚠️ 仅管理员
 
 ```bash
-curl -X POST <HOST>/api/faq/upload \
+curl -X POST <HOST>/open_api/faq/upload \
   -H "Authorization: Bearer <TOKEN>" \
   -F "file=@faq.txt"
 ```
@@ -565,10 +603,10 @@ curl -X POST <HOST>/api/faq/upload \
 
 ### 更新 FAQ
 
-`PUT /api/faq/:id` ⚠️ 仅管理员
+`PUT /open_api/faq/:id` ⚠️ 仅管理员
 
 ```bash
-curl -X PUT <HOST>/api/faq/1 \
+curl -X PUT <HOST>/open_api/faq/1 \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"answer":"新的回复内容","questions":["新问题1","新问题2"]}'
@@ -580,10 +618,10 @@ curl -X PUT <HOST>/api/faq/1 \
 
 ### 删除 FAQ
 
-`DELETE /api/faq/:id` ⚠️ 仅管理员
+`DELETE /open_api/faq/:id` ⚠️ 仅管理员
 
 ```bash
-curl -X DELETE <HOST>/api/faq/1 -H "Authorization: Bearer <TOKEN>"
+curl -X DELETE <HOST>/open_api/faq/1 -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -592,10 +630,10 @@ curl -X DELETE <HOST>/api/faq/1 -H "Authorization: Bearer <TOKEN>"
 
 ### 清空 FAQ
 
-`DELETE /api/faq` ⚠️ 仅管理员
+`DELETE /open_api/faq` ⚠️ 仅管理员
 
 ```bash
-curl -X DELETE <HOST>/api/faq -H "Authorization: Bearer <TOKEN>"
+curl -X DELETE <HOST>/open_api/faq -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -608,10 +646,10 @@ curl -X DELETE <HOST>/api/faq -H "Authorization: Bearer <TOKEN>"
 
 ### 查询用户列表
 
-`GET /api/users` ⚠️ 仅管理员
+`GET /open_api/users` ⚠️ 仅管理员
 
 ```bash
-curl <HOST>/api/users -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/users -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -620,10 +658,10 @@ curl <HOST>/api/users -H "Authorization: Bearer <TOKEN>"
 
 ### 创建用户
 
-`POST /api/users` ⚠️ 仅管理员
+`POST /open_api/users` ⚠️ 仅管理员
 
 ```bash
-curl -X POST <HOST>/api/users \
+curl -X POST <HOST>/open_api/users \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"user_name":"new_user","user_pwd":"123456","role":0,"note":""}'
@@ -642,10 +680,10 @@ curl -X POST <HOST>/api/users \
 
 ### 删除用户
 
-`DELETE /api/users/:name` ⚠️ 仅管理员
+`DELETE /open_api/users/:name` ⚠️ 仅管理员
 
 ```bash
-curl -X DELETE <HOST>/api/users/new_user -H "Authorization: Bearer <TOKEN>"
+curl -X DELETE <HOST>/open_api/users/new_user -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -654,10 +692,10 @@ curl -X DELETE <HOST>/api/users/new_user -H "Authorization: Bearer <TOKEN>"
 
 ### 重置密码
 
-`PUT /api/users/:name/reset-pwd` ⚠️ 仅管理员
+`PUT /open_api/users/:name/reset-pwd` ⚠️ 仅管理员
 
 ```bash
-curl -X PUT <HOST>/api/users/admin/reset-pwd \
+curl -X PUT <HOST>/open_api/users/admin/reset-pwd \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"user_pwd":"admin"}'
@@ -673,10 +711,10 @@ curl -X PUT <HOST>/api/users/admin/reset-pwd \
 
 ### 修改密码
 
-`PUT /api/user/password`
+`PUT /open_api/user/password`
 
 ```bash
-curl -X PUT <HOST>/api/user/password \
+curl -X PUT <HOST>/open_api/user/password \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"old_pwd":"admin","new_pwd":"newpass123"}'
@@ -688,53 +726,59 @@ curl -X PUT <HOST>/api/user/password \
 
 ### 查询我的 Token
 
-`GET /api/user/tokens`
+`GET /open_api/user/tokens`
 
 ```bash
-curl <HOST>/api/user/tokens -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/user/tokens -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
-{"data":[{"id":1,"token_preview":"eyJ...XXX","expires_at":"2026-09-06T...","create_time":"..."}]}
+{"data":[{"id":1,"token_preview":"eyJ...XXX","expires_at":"2026-09-06T...","expiring_soon":false,"create_time":"..."}]}
 ```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | int | Token 记录 ID |
+| token_preview | string | Token 前 16 位预览 |
+| expires_at | string | 过期时间 |
+| expiring_soon | bool | 是否在 10 分钟内过期 |
+| create_time | string | 创建时间 |
 
 ### 生成 Token
 
-`POST /api/user/token`
+`POST /open_api/user/token`
 
 ```bash
-curl -X POST <HOST>/api/user/token \
+curl -X POST <HOST>/open_api/user/token \
   -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
-{"status":"ok","token":"eyJhbGciOi...","expires_at":"2026-09-06T10:00:00Z"}
+{"status":"ok","token":"eyJhbGciOi...","expires_at":"2026-09-06 10:00:05"}
 ```
 
 ### 查询调用日志
 
-`GET /api/user/call-logs`
+`GET /open_api/user/call-logs`
 
 ```bash
-curl <HOST>/api/user/call-logs -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/user/call-logs -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
-{"data":[{"id":1,"api_path":"/api/chat","method":"POST","status_code":200,"created_at":"..."}]}
+{"data":[{"id":1,"api_path":"/open_api/chat","method":"POST","status_code":200,"created_at":"..."}]}
 ```
 
 ---
 
 ## 9. 管理 Agent
 
-> 所有认证用户均可读写 Agent。
-
 ### 查询全部 Agent
 
-`GET /api/ai-agents`
+`GET /open_api/ai-agents`
 
 ```bash
-curl <HOST>/api/ai-agents -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/ai-agents -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -743,24 +787,26 @@ curl <HOST>/api/ai-agents -H "Authorization: Bearer <TOKEN>"
 
 ### 查询公开 Agent 列表
 
-`GET /api/ai-agents/public`
+`GET /open_api/ai-agents/public`
 
 ```bash
-curl <HOST>/api/ai-agents/public -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/ai-agents/public -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
 {"data":[{"id":1,"name":"通用客服"}]}
 ```
 
-> 仅返回 `id` + `name`，供聊天页下拉选择用。
+> 仅返回 `id` + `name`，供下拉选择用。
 
 ### 创建 Agent
 
-`POST /api/ai-agents`
+`POST /open_api/ai-agents`
+
+> 需要 chat 角色（`server.role` 为 `chat` 或 `all`）。
 
 ```bash
-curl -X POST <HOST>/api/ai-agents \
+curl -X POST <HOST>/open_api/ai-agents \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -781,10 +827,10 @@ curl -X POST <HOST>/api/ai-agents \
 
 ### 查询 Agent 详情
 
-`GET /api/ai-agents/:id`
+`GET /open_api/ai-agents/:id`
 
 ```bash
-curl <HOST>/api/ai-agents/1 -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/ai-agents/1 -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -793,10 +839,12 @@ curl <HOST>/api/ai-agents/1 -H "Authorization: Bearer <TOKEN>"
 
 ### 更新 Agent
 
-`PUT /api/ai-agents/:id`
+`PUT /open_api/ai-agents/:id`
+
+> 需要 chat 角色。
 
 ```bash
-curl -X PUT <HOST>/api/ai-agents/1 \
+curl -X PUT <HOST>/open_api/ai-agents/1 \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"name":"燃气客服 v2","system_prompt":"更新后的提示词..."}'
@@ -808,10 +856,12 @@ curl -X PUT <HOST>/api/ai-agents/1 \
 
 ### 删除 Agent
 
-`DELETE /api/ai-agents/:id`
+`DELETE /open_api/ai-agents/:id`
+
+> 需要 chat 角色。
 
 ```bash
-curl -X DELETE <HOST>/api/ai-agents/2 -H "Authorization: Bearer <TOKEN>"
+curl -X DELETE <HOST>/open_api/ai-agents/2 -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -822,14 +872,12 @@ curl -X DELETE <HOST>/api/ai-agents/2 -H "Authorization: Bearer <TOKEN>"
 
 ## 10. 管理工作流
 
-> 读取（列表/详情）：所有认证用户可访问。创建/更新/删除：仅管理员。
-
 ### 查询公开工作流列表
 
-`GET /api/workflows`
+`GET /open_api/workflows`
 
 ```bash
-curl <HOST>/api/workflows -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/workflows -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -838,12 +886,10 @@ curl <HOST>/api/workflows -H "Authorization: Bearer <TOKEN>"
 
 ### 查询工作流详情
 
-`GET /api/workflows/:id`
-
-所有认证用户均可查看详情（含节点、分类器配置）。
+`GET /open_api/workflows/:id`
 
 ```bash
-curl <HOST>/api/workflows/1 -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/workflows/1 -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -852,10 +898,10 @@ curl <HOST>/api/workflows/1 -H "Authorization: Bearer <TOKEN>"
 
 ### 创建工作流
 
-`POST /api/workflows` ⚠️ 仅管理员
+`POST /open_api/workflows` ⚠️ 仅管理员
 
 ```bash
-curl -X POST <HOST>/api/workflows \
+curl -X POST <HOST>/open_api/workflows \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -885,10 +931,10 @@ curl -X POST <HOST>/api/workflows \
 
 ### 更新工作流
 
-`PUT /api/workflows/:id` ⚠️ 仅管理员
+`PUT /open_api/workflows/:id` ⚠️ 仅管理员
 
 ```bash
-curl -X PUT <HOST>/api/workflows/1 \
+curl -X PUT <HOST>/open_api/workflows/1 \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"name":"燃气客服 v2"}'
@@ -900,10 +946,10 @@ curl -X PUT <HOST>/api/workflows/1 \
 
 ### 删除工作流
 
-`DELETE /api/workflows/:id` ⚠️ 仅管理员
+`DELETE /open_api/workflows/:id` ⚠️ 仅管理员
 
 ```bash
-curl -X DELETE <HOST>/api/workflows/2 -H "Authorization: Bearer <TOKEN>"
+curl -X DELETE <HOST>/open_api/workflows/2 -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -914,12 +960,10 @@ curl -X DELETE <HOST>/api/workflows/2 -H "Authorization: Bearer <TOKEN>"
 
 ## 11. 测试意图分类
 
-`POST /api/classifier/test`
-
-所有认证用户可用。
+`POST /open_api/classifier/test`
 
 ```bash
-curl -X POST <HOST>/api/classifier/test \
+curl -X POST <HOST>/open_api/classifier/test \
   -H "Authorization: Bearer <TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"workflow_id":1,"text":"燃气费怎么查"}'
@@ -947,10 +991,10 @@ curl -X POST <HOST>/api/classifier/test \
 
 ## 12. 查询系统变量
 
-`GET /api/system-vars`
+`GET /open_api/system-vars`
 
 ```bash
-curl <HOST>/api/system-vars -H "Authorization: Bearer <TOKEN>"
+curl <HOST>/open_api/system-vars -H "Authorization: Bearer <TOKEN>"
 ```
 
 ```json
@@ -975,16 +1019,17 @@ curl <HOST>/api/system-vars -H "Authorization: Bearer <TOKEN>"
 | role | 说明 | 权限概述 |
 |------|------|---------|
 | 0 | 普通用户 | 聊天、查看知识库、查看 FAQ、查看工作流/Agent |
-| 1 | 管理员 | 全部权限：配置管理、用户管理、FAQ/工作流/Agent 写操作 |
+| 1 | 管理员 | 全部权限：配置管理、用户管理、FAQ/工作流/VDB 写操作 |
 | 2 | 客服座席 | 同普通用户 + 座席在线状态 |
 | 3 | API 用户 | 同普通用户，适合第三方程序调用 |
 
-### 认证行为
+### 认证说明
 
-| api_auth | 行为 |
-|----------|------|
-| `true` | 所有 `/api/*` 路由需携带 `Authorization: Bearer <TOKEN>` |
-| `false` | `/api/*` 可免 token 访问；聊天接口支持通过 `uid` 字段管理多会话 |
+`/open_api/*` 始终强制 Bearer Token 认证，不受 `sys.api_auth` 开关影响。
+
+- 请求头：`Authorization: Bearer <TOKEN>`
+- Token 通过 `/api/login` 获取，有效期 2 小时
+- 可通过 `/open_api/user/token` 为 API 用户生成新的 Bearer Token（同样 2 小时有效期）
 
 ### 工作模式
 
@@ -999,82 +1044,83 @@ curl <HOST>/api/system-vars -H "Authorization: Bearer <TOKEN>"
 | 方法 | 路径 | 权限 | 说明 |
 |------|------|------|------|
 | GET | `/health` | 免认证 | 健康检查 |
-| POST | `/api/login` | 免认证 | 登录 |
+| POST | `/api/login` | 免认证 | 登录（获取 Token） |
 | POST | `/api/logout` | 免认证 | 登出 |
-| GET | `/api/me` | 认证 | 当前用户信息 |
-| GET | `/api/agents` | 认证 | 在线座席 |
-| POST | `/api/chat` | 认证 | SSE 流式聊天 |
-| POST | `/api/chat/sync` | 认证 | 同步聊天 |
-| GET | `/api/chat/history` | 认证 | 聊天历史 |
-| POST | `/api/chat/clear` | 认证 | 清空会话 |
-| GET | `/api/info` | 认证 | 服务信息 |
-| GET | `/api/config` | 认证 | 读取配置 |
-| PUT | `/api/config` | 管理员 | 更新配置 |
-| POST | `/api/config/test-models` | 管理员 | 测试模型连接 |
-| GET | `/api/vdb` | 认证 | 我的知识库 |
-| GET | `/api/vdb/pub` | 认证 | 公开知识库 |
-| POST | `/api/vdb` | 认证 | 创建知识库 |
-| DELETE | `/api/vdb/:id` | 认证 | 删除知识库 |
-| PUT | `/api/vdb/:id/default` | 认证 | 设为默认 |
-| GET | `/api/vdb/:id/files` | 认证 | 文件列表 |
-| POST | `/api/vdb/:id/upload` | 认证 | 上传文件 |
-| POST | `/api/vdb/search` | 认证 | 搜索知识库 |
-| GET | `/api/vdb/file/:id/progress` | 认证 | 处理进度 |
-| GET | `/api/vdb/file/:id/chunks` | 认证 | 文件分块 |
-| GET | `/api/vdb/file/:id/download` | 认证 | 下载文件 |
-| DELETE | `/api/vdb/file/:id` | 认证 | 删除文件 |
-| GET | `/api/vdb/bindings` | 管理员 | CSM 绑定 |
-| PUT | `/api/vdb/bindings` | 管理员 | 保存 CSM 绑定 |
-| GET | `/api/faq` | 认证 | FAQ 列表 |
-| POST | `/api/faq/match` | 认证 | FAQ 匹配 |
-| GET | `/api/faq/template` | 认证 | FAQ 模板 |
-| POST | `/api/faq` | 管理员 | 创建 FAQ |
-| POST | `/api/faq/upload` | 管理员 | 上传 FAQ |
-| PUT | `/api/faq/:id` | 管理员 | 更新 FAQ |
-| DELETE | `/api/faq/:id` | 管理员 | 删除 FAQ |
-| DELETE | `/api/faq` | 管理员 | 清空 FAQ |
-| GET | `/api/users` | 管理员 | 用户列表 |
-| POST | `/api/users` | 管理员 | 创建用户 |
-| DELETE | `/api/users/:name` | 管理员 | 删除用户 |
-| PUT | `/api/users/:name/reset-pwd` | 管理员 | 重置密码 |
-| PUT | `/api/user/password` | 认证 | 修改密码 |
-| GET | `/api/user/tokens` | 认证 | 我的 Token |
-| POST | `/api/user/token` | 认证 | 生成 Token |
-| GET | `/api/user/call-logs` | 认证 | 调用日志 |
-| GET | `/api/ai-agents` | 认证 | Agent 列表 |
-| GET | `/api/ai-agents/public` | 认证 | Agent 公开列表 |
-| POST | `/api/ai-agents` | 认证 | 创建 Agent |
-| GET | `/api/ai-agents/:id` | 认证 | Agent 详情 |
-| PUT | `/api/ai-agents/:id` | 认证 | 更新 Agent |
-| DELETE | `/api/ai-agents/:id` | 认证 | 删除 Agent |
-| GET | `/api/workflows` | 认证 | 工作流列表 |
-| GET | `/api/workflows/:id` | 认证 | 工作流详情 |
-| POST | `/api/workflows` | 管理员 | 创建工作流 |
-| PUT | `/api/workflows/:id` | 管理员 | 更新工作流 |
-| DELETE | `/api/workflows/:id` | 管理员 | 删除工作流 |
-| POST | `/api/classifier/test` | 认证 | 测试意图分类 |
-| GET | `/api/system-vars` | 认证 | 系统变量 |
+| POST | `/api/register` | 免认证 | 注册 |
+| GET | `/open_api/me` | 认证 | 当前用户信息 |
+| GET | `/open_api/agents` | 认证 | 在线座席 |
+| POST | `/open_api/chat` | 认证 | SSE 流式聊天 |
+| POST | `/open_api/chat/sync` | 认证 | 同步聊天 |
+| GET | `/open_api/chat/history` | 认证 | 聊天历史 |
+| POST | `/open_api/chat/clear` | 认证 | 清空会话 |
+| GET | `/open_api/info` | 认证 | 服务信息 |
+| GET | `/open_api/config` | 认证 | 读取配置 |
+| PUT | `/open_api/config` | 管理员 | 更新配置 |
+| POST | `/open_api/config/test-models` | 管理员 | 测试模型连接 |
+| GET | `/open_api/vdb` | 认证 | 我的知识库 |
+| GET | `/open_api/vdb/pub` | 认证 | 公开知识库 |
+| POST | `/open_api/vdb` | 管理员 | 创建知识库 |
+| DELETE | `/open_api/vdb/:id` | 管理员 | 删除知识库 |
+| PUT | `/open_api/vdb/:id/default` | 管理员 | 设为默认 |
+| GET | `/open_api/vdb/:id/files` | 管理员 | 文件列表 |
+| POST | `/open_api/vdb/:id/upload` | 管理员 | 上传文件 |
+| POST | `/open_api/vdb/search` | 认证 | 搜索知识库 |
+| GET | `/open_api/vdb/file/:id/progress` | 管理员 | 处理进度 |
+| GET | `/open_api/vdb/file/:id/chunks` | 管理员 | 文件分块 |
+| GET | `/open_api/vdb/file/:id/download` | 管理员 | 下载文件 |
+| DELETE | `/open_api/vdb/file/:id` | 管理员 | 删除文件 |
+| GET | `/open_api/vdb/bindings` | 管理员 | CSM 绑定 |
+| PUT | `/open_api/vdb/bindings` | 管理员 | 保存 CSM 绑定 |
+| GET | `/open_api/faq` | 认证 | FAQ 列表 |
+| POST | `/open_api/faq/match` | 认证 | FAQ 匹配 |
+| GET | `/open_api/faq/template` | 认证 | FAQ 模板 |
+| POST | `/open_api/faq` | 管理员 | 创建 FAQ |
+| POST | `/open_api/faq/upload` | 管理员 | 上传 FAQ |
+| PUT | `/open_api/faq/:id` | 管理员 | 更新 FAQ |
+| DELETE | `/open_api/faq/:id` | 管理员 | 删除 FAQ |
+| DELETE | `/open_api/faq` | 管理员 | 清空 FAQ |
+| GET | `/open_api/users` | 管理员 | 用户列表 |
+| POST | `/open_api/users` | 管理员 | 创建用户 |
+| DELETE | `/open_api/users/:name` | 管理员 | 删除用户 |
+| PUT | `/open_api/users/:name/reset-pwd` | 管理员 | 重置密码 |
+| PUT | `/open_api/user/password` | 认证 | 修改密码 |
+| GET | `/open_api/user/tokens` | 认证 | 我的 Token |
+| POST | `/open_api/user/token` | 认证 | 生成 Token |
+| GET | `/open_api/user/call-logs` | 认证 | 调用日志 |
+| GET | `/open_api/ai-agents` | 认证 | Agent 列表 |
+| GET | `/open_api/ai-agents/public` | 认证 | Agent 公开列表 |
+| POST | `/open_api/ai-agents` | 认证 | 创建 Agent |
+| GET | `/open_api/ai-agents/:id` | 认证 | Agent 详情 |
+| PUT | `/open_api/ai-agents/:id` | 认证 | 更新 Agent |
+| DELETE | `/open_api/ai-agents/:id` | 认证 | 删除 Agent |
+| GET | `/open_api/workflows` | 认证 | 工作流列表 |
+| GET | `/open_api/workflows/:id` | 认证 | 工作流详情 |
+| POST | `/open_api/workflows` | 管理员 | 创建工作流 |
+| PUT | `/open_api/workflows/:id` | 管理员 | 更新工作流 |
+| DELETE | `/open_api/workflows/:id` | 管理员 | 删除工作流 |
+| POST | `/open_api/classifier/test` | 认证 | 测试意图分类 |
+| GET | `/open_api/system-vars` | 认证 | 系统变量 |
 
 ### 通用 curl 模板
 
 ```bash
-# GET
-curl <HOST>/api/<path> -H "Authorization: Bearer <TOKEN>"
-
-# POST/PUT JSON
-curl -X POST <HOST>/api/<path> \
-  -H "Authorization: Bearer <TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{"key":"value"}'
-
-# 文件上传
-curl -X POST <HOST>/api/<path> \
-  -H "Authorization: Bearer <TOKEN>" \
-  -F "file=@/path/to/file.txt"
-
-# 登录并保存 Token
+# 登录获取 Token
 TOKEN=$(curl -s <HOST>/api/login \
   -H "Content-Type: application/json" \
   -d '{"user_name":"admin","password":"admin"}' \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+# GET
+curl <HOST>/open_api/<path> -H "Authorization: Bearer $TOKEN"
+
+# POST/PUT JSON
+curl -X POST <HOST>/open_api/<path> \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"value"}'
+
+# 文件上传
+curl -X POST <HOST>/open_api/<path> \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@/path/to/file.txt"
 ```

@@ -5,16 +5,8 @@ const queryInput = document.getElementById('query-input');
 const sendButton = document.getElementById('send-button');
 const stopButton = document.getElementById('stop-button');
 
-// 获取 token
-function getToken() {
-    return localStorage.getItem('token') || '';
-}
-
-// 带认证头的 fetch 封装
+// 认证走 httpOnly Cookie，fetch 自动携带，无需手动附加 token
 function authFetch(url, options) {
-    options = options || {};
-    options.headers = options.headers || {};
-    options.headers['Authorization'] = 'Bearer ' + getToken();
     return fetch(url, options);
 }
 
@@ -138,7 +130,7 @@ async function fetchQueryData(query) {
     currentBotMessage = addMessage('<div class="typing-indicator"><span></span><span></span><span></span> 思考中...</div>', 'bot');
 
     try {
-        const response = await authFetch('/api/chat', {
+        const response = await authFetch('/api/v1/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -287,7 +279,7 @@ async function newChat() {
         abortController.abort();
     }
     try {
-        await authFetch('/api/chat/clear', {
+        await authFetch('/api/v1/chat/clear', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({})
@@ -330,6 +322,7 @@ function showChangePwd() {
     document.getElementById('pwdModal').style.display = 'flex';
     document.getElementById('oldPwd').value = '';
     document.getElementById('newPwd').value = '';
+    document.getElementById('newPwd2').value = '';
     document.getElementById('pwdError').style.display = 'none';
 }
 function hideChangePwd() {
@@ -339,14 +332,20 @@ document.getElementById('pwdForm').addEventListener('submit', async function(e) 
     e.preventDefault();
     const oldPwd = document.getElementById('oldPwd').value.trim();
     const newPwd = document.getElementById('newPwd').value.trim();
+    const newPwd2 = document.getElementById('newPwd2').value.trim();
     const errDiv = document.getElementById('pwdError');
-    if (!oldPwd || !newPwd) {
+    if (!oldPwd || !newPwd || !newPwd2) {
         errDiv.textContent = '密码不能为空';
         errDiv.style.display = 'block';
         return;
     }
+    if (newPwd !== newPwd2) {
+        errDiv.textContent = '两次输入的新密码不一致';
+        errDiv.style.display = 'block';
+        return;
+    }
     try {
-        const resp = await authFetch('/api/user/password', {
+        const resp = await authFetch('/api/v1/user/password', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ old_pwd: oldPwd, new_pwd: newPwd })

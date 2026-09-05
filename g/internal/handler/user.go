@@ -287,7 +287,7 @@ func (h *UserHandler) GenerateToken(c *gin.Context) {
 		preview = token[:16]
 	}
 	if err := h.store.SaveApiToken(userName, preview, expiry); err != nil {
-		slog.Error("保存 API token 失败", "error", err)
+		slog.Error("user_save_api_token_failed", "error", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -383,7 +383,7 @@ func ApiCallLogMiddleware(store store.MetaStore) gin.HandlerFunc {
 		go func() {
 			if err := store.SaveApiCallLog(userName, c.Request.URL.Path, c.Request.Method,
 				reqBody, respBody, statusCode, errMsg); err != nil {
-				slog.Error("保存 API 调用日志失败", "error", err)
+				slog.Error("user_save_api_call_log_failed", "error", err)
 			}
 		}()
 	}

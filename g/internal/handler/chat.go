@@ -48,8 +48,14 @@ func NewChatHandler(cfg *model.Config, kbMgr *kb.Manager, sessionMgr *session.Ma
 	}
 }
 
-// resolveUID 根据 api_auth 开关决定使用哪个 UID
+// resolveUID 根据认证来源决定 UID
+// open_api (Bearer): 强制使用 token 中的用户名，不接受请求体中的 uid
+// 前端 (Cookie): api_auth 开启时强制使用 token uid，关闭时优先使用请求体中的 uid
 func (h *ChatHandler) resolveUID(c *gin.Context, reqUID string) string {
+	if isBearerAuth(c) {
+		// open_api: 始终使用 token 中的用户名
+		return getAuthUID(c)
+	}
 	if h.cfg.Sys.ApiAuth {
 		// API 认证开启时，强制使用 token 解析的 uid
 		return getAuthUID(c)
@@ -202,7 +208,7 @@ func (h *ChatHandler) chatWithKB(c *gin.Context, req *model.ChatRequest, uid str
 	if h.faqHandler != nil && h.faqHandler.GetFaqCount() > 0 {
 		faqAnswer, faqScore, err := h.faqHandler.MatchFaq(req.Msg, faqThreshold)
 		if err == nil && faqAnswer != "" {
-			slog.Info("faq-matched", "uid", uid, "query", req.Msg[:min(50, len(req.Msg))], "score", faqScore)
+			slog.Info("chat_faq_matched", "uid", uid, "query", req.Msg[:min(50, len(req.Msg))], "score", faqScore)
 			h.sessionMgr.AddMessage(uid, "user", req.Msg)
 			fmt.Fprintf(c.Writer, "data: \n\n")
 			flusher.Flush()
@@ -223,7 +229,7 @@ func (h *ChatHandler) chatWithKB(c *gin.Context, req *model.ChatRequest, uid str
 	promptTemplate := h.getPromptTemplate()
 	systemPrompt := buildPrompt(promptTemplate, contextStr, historyStr, req.Msg, curDate, curWeek)
 
-	slog.Info("chat", "uid", uid, "query", req.Msg[:min(50, len(req.Msg))], "contextLen", len(contextStr))
+	slog.Info("chat_kb_start", "uid", uid, "query", req.Msg[:min(50, len(req.Msg))], "context_len", len(contextStr))
 
 	h.sessionMgr.AddMessage(uid, "user", req.Msg)
 
@@ -243,7 +249,7 @@ func (h *ChatHandler) chatWithKB(c *gin.Context, req *model.ChatRequest, uid str
 	select {
 	case err := <-errCh:
 		if err != nil {
-			slog.Error("LLM 错误", "error", err)
+			slog.Error("chat_llm_error", "error", err)
 			fmt.Fprintf(c.Writer, "data: [错误] %v\n\n", err)
 			flusher.Flush()
 		}
@@ -269,7 +275,7 @@ func (h *ChatHandler) chatWithCSMWorkflow(c *gin.Context, req *model.ChatRequest
 
 	h.sessionMgr.AddMessage(uid, "user", req.Msg)
 
-	slog.Info("workflow-chat-csm", "uid", uid, "query", req.Msg[:min(50, len(req.Msg))])
+	slog.Info("chat_workflow_csm_start", "uid", uid, "query", req.Msg[:min(50, len(req.Msg))])
 
 	fmt.Fprintf(c.Writer, "data: \n\n")
 	flusher.Flush()
@@ -287,7 +293,7 @@ func (h *ChatHandler) chatWithCSMWorkflow(c *gin.Context, req *model.ChatRequest
 			fmt.Fprintf(c.Writer, "data: %s\n\n", evt.Content)
 			flusher.Flush()
 		case "error":
-			slog.Error("workflow error", "error", evt.Content)
+			slog.Error("chat_workflow_csm_error", "error", evt.Content)
 			fmt.Fprintf(c.Writer, "data: [错误] %s\n\n", evt.Content)
 			flusher.Flush()
 		case "done":
@@ -314,7 +320,7 @@ func (h *ChatHandler) chatWithDynamicWorkflow(c *gin.Context, req *model.ChatReq
 	h.sessionMgr.AddMessage(uid, "user", req.Msg)
 
 	workflowID := h.cfg.Sys.DefaultWorkflowID
-	slog.Info("workflow-chat-dynamic", "uid", uid, "workflow", workflowID, "query", req.Msg[:min(50, len(req.Msg))])
+	slog.Info("chat_workflow_dynamic_start", "uid", uid, "workflow", workflowID, "query", req.Msg[:min(50, len(req.Msg))])
 
 	fmt.Fprintf(c.Writer, "data: \n\n")
 	flusher.Flush()
@@ -332,7 +338,7 @@ func (h *ChatHandler) chatWithDynamicWorkflow(c *gin.Context, req *model.ChatReq
 			fmt.Fprintf(c.Writer, "data: %s\n\n", evt.Content)
 			flusher.Flush()
 		case "error":
-			slog.Error("workflow error", "error", evt.Content)
+			slog.Error("chat_workflow_dynamic_error", "error", evt.Content)
 			fmt.Fprintf(c.Writer, "data: [错误] %s\n\n", evt.Content)
 			flusher.Flush()
 		case "done":

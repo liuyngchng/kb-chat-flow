@@ -165,22 +165,18 @@ public class TokenProvider {
     }
 
     /**
-     * Extract the token string from an Authorization header, Cookie header, or URL parameter.
-     * Priority: Cookie "auth_token" > URL param "t" > Authorization: Bearer header
+     * Extract token from Cookie header only (frontend auth).
+     * Looks for "auth_token" in the Cookie header value.
      */
-    public static String extractToken(String authHeader, String cookieHeader, String queryParam) {
-        // Cookie first (browser users)
-        if (cookieHeader != null && !cookieHeader.isEmpty()) {
-            String tokenFromCookie = extractCookieValue(cookieHeader, "auth_token");
-            if (tokenFromCookie != null && !tokenFromCookie.isEmpty()) {
-                return tokenFromCookie;
-            }
-        }
-        // URL param
-        if (queryParam != null && !queryParam.isEmpty()) {
-            return queryParam;
-        }
-        // Authorization header
+    public static String extractTokenFromCookie(String cookieHeader) {
+        if (cookieHeader == null || cookieHeader.isEmpty()) return null;
+        return extractCookieValue(cookieHeader, "auth_token");
+    }
+
+    /**
+     * Extract token from Authorization: Bearer header only (open_api auth).
+     */
+    public static String extractTokenFromBearer(String authHeader) {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             return authHeader.substring(7);
         }
@@ -188,8 +184,30 @@ public class TokenProvider {
     }
 
     /**
-     * Extract the token string from an Authorization header or URL parameter (backward-compatible).
+     * Extract the token string from an Authorization header, Cookie header, or URL parameter.
+     * Priority: Cookie "auth_token" > URL param "t" > Authorization: Bearer header
+     * @deprecated 新代码应使用 extractTokenFromCookie() 或 extractTokenFromBearer()
      */
+    @Deprecated
+    public static String extractToken(String authHeader, String cookieHeader, String queryParam) {
+        // Cookie first (browser users)
+        String tokenFromCookie = extractTokenFromCookie(cookieHeader);
+        if (tokenFromCookie != null && !tokenFromCookie.isEmpty()) {
+            return tokenFromCookie;
+        }
+        // URL param
+        if (queryParam != null && !queryParam.isEmpty()) {
+            return queryParam;
+        }
+        // Authorization header
+        return extractTokenFromBearer(authHeader);
+    }
+
+    /**
+     * Extract the token string from an Authorization header or URL parameter (backward-compatible).
+     * @deprecated 新代码应使用 extractTokenFromCookie() 或 extractTokenFromBearer()
+     */
+    @Deprecated
     public static String extractToken(String authHeader, String queryParam) {
         return extractToken(authHeader, null, queryParam);
     }

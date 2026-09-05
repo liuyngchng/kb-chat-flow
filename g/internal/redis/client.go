@@ -38,7 +38,7 @@ func New(cfg *model.Config) (*Client, error) {
 		return nil, fmt.Errorf("redis ping failed: %w", err)
 	}
 
-	slog.Info("redis connected", "addr", cfg.Redis.Addr, "db", cfg.Redis.DB)
+	slog.Info("redis_connected", "addr", cfg.Redis.Addr, "db", cfg.Redis.DB)
 	return &Client{rdb: rdb}, nil
 }
 
@@ -59,11 +59,11 @@ func NewOptional(cfg *model.Config) *Client {
 	defer cancel()
 
 	if err := rdb.Ping(ctx).Err(); err != nil {
-		slog.Warn("redis not available, falling back to in-memory", "error", err)
+		slog.Warn("redis_not_available_fallback", "error", err)
 		return nil
 	}
 
-	slog.Info("redis connected (optional)", "addr", cfg.Redis.Addr, "db", cfg.Redis.DB)
+	slog.Info("redis_connected_optional", "addr", cfg.Redis.Addr, "db", cfg.Redis.DB)
 	return &Client{rdb: rdb}
 }
 

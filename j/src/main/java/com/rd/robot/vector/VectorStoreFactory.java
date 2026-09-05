@@ -28,7 +28,7 @@ public class VectorStoreFactory {
                 if (cfg.getMilvus() == null || cfg.getMilvus().getUri() == null || cfg.getMilvus().getUri().isEmpty()) {
                     throw new RuntimeException("Milvus URI 未配置");
                 }
-                log.info("使用远程 Milvus uri={}", cfg.getMilvus().getUri());
+                log.info("vdb_milvus_remote_init uri={}", cfg.getMilvus().getUri());
                 try {
                     return new MilvusVectorStore(cfg.getMilvus().getUri(), cfg.getMilvus().getToken());
                 } catch (Exception e) {
@@ -41,7 +41,7 @@ public class VectorStoreFactory {
                 }
                 int port = cfg.getQdrant().getPort();
                 if (port == 0) port = 6334;
-                log.info("使用 Qdrant 向量存储 host={} port={}", cfg.getQdrant().getHost(), port);
+                log.info("vdb_qdrant_init host={} port={}", cfg.getQdrant().getHost(), port);
                 return new QdrantVectorStore(
                         cfg.getQdrant().getHost(),
                         port,
@@ -52,7 +52,7 @@ public class VectorStoreFactory {
 
             default:
                 // "local" 或空
-                log.info("使用本地向量存储 vdbID={}", vdbId);
+                log.info("vdb_local_init vdb_id={}", vdbId);
                 try {
                     return new LocalVectorStore("./vdb/vectors.db", vdbId);
                 } catch (Exception e) {

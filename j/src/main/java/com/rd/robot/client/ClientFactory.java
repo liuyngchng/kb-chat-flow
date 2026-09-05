@@ -38,7 +38,7 @@ public class ClientFactory {
                     if (uri == null || uri.isEmpty()) {
                         throw new RuntimeException("Embedding API 未配置，请在系统管理页面中设置");
                     }
-                    log.info("创建 EmbeddingClient model={}", model);
+                    log.info("client_factory_create_embedding model={}", model);
                     embeddingClient = new EmbeddingClient(uri, key, model);
                 }
             }
@@ -60,7 +60,7 @@ public class ClientFactory {
                     if (uri == null || uri.isEmpty()) {
                         throw new RuntimeException("LLM API 未配置，请在系统管理页面中设置");
                     }
-                    log.info("创建 LlmClient model={}", model);
+                    log.info("client_factory_create_llm model={}", model);
                     llmClient = new LlmClient(uri, key, model);
                 }
             }
@@ -103,7 +103,7 @@ public class ClientFactory {
             synchronized (this) {
                 if (rerankClient == null) {
                     String key = metaStore.getConfig("api.rerank_api_key");
-                    log.info("创建 RerankClient model={}", model);
+                    log.info("client_factory_create_rerank model={}", model);
                     rerankClient = new RerankClient(uri, key, model);
                 }
             }
@@ -116,7 +116,7 @@ public class ClientFactory {
     // ============================================================
 
     public void invalidate() {
-        log.info("客户端缓存已清除");
+        log.info("client_factory_cache_cleared");
         embeddingClient = null;
         llmClient = null;
         rerankClient = null;

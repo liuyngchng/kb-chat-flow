@@ -227,7 +227,7 @@ public class KnowledgeBaseManager {
                 }
                 results = reordered;
             } catch (Exception e) {
-                log.warn("rerank 失败，回退到原始排序", e);
+                log.warn("kb_rerank_failed_fallback", e);
                 results = results.subList(0, Math.min(topK, results.size()));
             }
         }
@@ -254,7 +254,7 @@ public class KnowledgeBaseManager {
                     allContext.append(ctx);
                 }
             } catch (Exception e) {
-                log.error("搜索知识库失败 vdbId={} error={}", vdbId, e.getMessage());
+                log.error("kb_search_in_kb_failed vdb_id={} error={}", vdbId, e.getMessage());
             }
         }
         return allContext.toString();
@@ -273,7 +273,7 @@ public class KnowledgeBaseManager {
                     allContext.append(ctx);
                 }
             } catch (Exception e) {
-                log.error("搜索知识库失败 kb={} error={}", kb.getName(), e.getMessage());
+                log.error("kb_search_all_kbs_failed kb={} error={}", kb.getName(), e.getMessage());
             }
         }
 
@@ -285,14 +285,14 @@ public class KnowledgeBaseManager {
     // ============================================================
 
     public void startFileWorker() {
-        log.info("文件处理 worker 已启动 cluster_mode={}", redisClient != null);
+        log.info("kb_file_worker_started cluster_mode={}", redisClient != null);
         scheduler.scheduleWithFixedDelay(this::processPendingFiles, 0, 5, TimeUnit.SECONDS);
     }
 
     public void stopFileWorker() {
         running = false;
         scheduler.shutdown();
-        log.info("文件处理 worker 已停止");
+        log.info("kb_file_worker_stopped");
     }
 
     private void processPendingFiles() {
@@ -320,14 +320,14 @@ public class KnowledgeBaseManager {
             try {
                 processFile(f);
             } catch (Exception e) {
-                log.error("处理文件失败 file={} error={}", f.getName(), e.getMessage());
+                log.error("kb_process_file_failed file={} error={}", f.getName(), e.getMessage());
                 store.updateFileProgress(f.getId(), 0, "处理失败: " + e.getMessage());
             }
         }
     }
 
     private void processFile(VdbFileInfo finfo) throws Exception {
-        log.info("开始处理文件 name={} id={}", finfo.getName(), finfo.getId());
+        log.info("kb_process_file_start name={} id={}", finfo.getName(), finfo.getId());
         store.updateFileProgress(finfo.getId(), 1, "开始处理文档");
 
         // 集群模式（S3）：先下载到本地临时文件，处理完后清理
@@ -364,7 +364,7 @@ public class KnowledgeBaseManager {
                 return;
             }
 
-            log.info("文件已切分 name={} chunks={}", finfo.getName(), chunks.size());
+            log.info("kb_file_chunked name={} chunks={}", finfo.getName(), chunks.size());
             store.updateFileProgress(finfo.getId(), 5,
                     String.format("已切分为 %d 个文本块，开始向量化", chunks.size()));
 
@@ -407,7 +407,7 @@ public class KnowledgeBaseManager {
 
             store.updateFileProgress(finfo.getId(), 100,
                     String.format("处理完成，共 %d 个文本块", totalChunks));
-            log.info("文件处理完成 name={}", finfo.getName());
+            log.info("kb_process_file_done name={}", finfo.getName());
         } finally {
             // 清理 S3 临时文件
             if (tmpPath != null && fileStore instanceof S3FileStore) {
@@ -428,7 +428,7 @@ public class KnowledgeBaseManager {
             }
             return ok;
         } catch (Exception e) {
-            log.warn("worker lock acquire failed error={}", e.getMessage());
+            log.warn("kb_worker_lock_acquire_failed error={}", e.getMessage());
             return false;
         }
     }
@@ -437,7 +437,7 @@ public class KnowledgeBaseManager {
         try {
             redisClient.del(WORKER_LOCK_KEY);
         } catch (Exception e) {
-            log.warn("worker lock release failed error={}", e.getMessage());
+            log.warn("kb_worker_lock_release_failed error={}", e.getMessage());
         }
     }
 
@@ -484,7 +484,7 @@ public class KnowledgeBaseManager {
                 vs.deleteBySource(source);
             }
         } catch (Exception e) {
-            log.error("删除向量失败", e);
+            log.error("kb_delete_vector_failed", e);
         } finally {
             lock.readLock().unlock();
         }

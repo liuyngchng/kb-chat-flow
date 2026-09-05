@@ -3,6 +3,7 @@
 # ============================================================
 g/go_to_chat
 g/kb-chat-flow
+g/build/
 j/target/
 j/dependency-reduced-pom.xml
 

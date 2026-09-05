@@ -179,13 +179,23 @@ public class WorkflowController {
 
     private static long parseIdFromPath(String uri) {
         String path = HttpServer.sanitizePath(uri);
-        if (path.startsWith("/api/workflows/")) {
-            String rest = path.substring(15);
-            int slashIdx = rest.indexOf('/');
-            if (slashIdx >= 0) rest = rest.substring(0, slashIdx);
+        String rest = extractIdFromPath(path, "/api/workflows/", "/api/v1/workflows/", "/open_api/workflows/");
+        if (rest != null) {
             try { return Long.parseLong(rest); } catch (NumberFormatException ignored) {}
         }
         return 0;
+    }
+
+    private static String extractIdFromPath(String path, String... prefixes) {
+        for (String prefix : prefixes) {
+            if (path.startsWith(prefix)) {
+                String rest = path.substring(prefix.length());
+                int slashIdx = rest.indexOf('/');
+                if (slashIdx >= 0) rest = rest.substring(0, slashIdx);
+                return rest;
+            }
+        }
+        return null;
     }
 
     /** Check if any node has DAG edges defined. */

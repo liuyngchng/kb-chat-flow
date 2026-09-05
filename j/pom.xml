@@ -15,6 +15,7 @@
         <java.version>17</java.version>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
@@ -131,6 +132,26 @@
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>enforce-java-version</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[17,)</version>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.4.2</version>
                 <configuration>
@@ -152,6 +173,8 @@
                             <goal>shade</goal>
                         </goals>
                         <configuration>
+                            <!-- 输出到 -shaded.jar，供 ProGuard 混淆 -->
+                            <outputFile>${project.build.directory}/${project.build.finalName}-shaded.jar</outputFile>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
@@ -171,6 +194,37 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+
+            <!-- ProGuard 混淆 -->
+            <plugin>
+                <groupId>com.github.wvengen</groupId>
+                <artifactId>proguard-maven-plugin</artifactId>
+                <version>2.6.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>proguard</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <proguardVersion>7.4.2</proguardVersion>
+                    <injar>${project.build.finalName}-shaded.jar</injar>
+                    <outjar>${project.build.finalName}.jar</outjar>
+                    <proguardInclude>${project.basedir}/proguard.pro</proguardInclude>
+                    <libs>
+                        <lib>${java.home}/jmods</lib>
+                    </libs>
+                                    </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>com.guardsquare</groupId>
+                        <artifactId>proguard-base</artifactId>
+                        <version>7.4.2</version>
+                    </dependency>
+                </dependencies>
             </plugin>
         </plugins>
     </build>

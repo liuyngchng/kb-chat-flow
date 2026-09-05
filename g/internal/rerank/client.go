@@ -90,7 +90,7 @@ func (c *Client) Rerank(query string, documents []string, topN int) ([]model.Rer
 		if len(bodyStr) > 300 {
 			bodyStr = bodyStr[:300] + "..."
 		}
-		slog.Error("rerank API 返回非 200", "status", resp.StatusCode, "body", bodyStr)
+		slog.Error("rerank_api_non_200_status", "status", resp.StatusCode, "body", bodyStr)
 		return nil, fmt.Errorf("rerank API 返回 %d", resp.StatusCode)
 	}
 

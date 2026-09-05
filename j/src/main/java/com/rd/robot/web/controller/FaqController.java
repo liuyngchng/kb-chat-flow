@@ -177,14 +177,14 @@ public class FaqController {
                     createFaqEntry(pair.questions, pair.answer, file.filename);
                     created++;
                 } catch (Exception e) {
-                    log.error("创建 FAQ 条目失败", e);
+                    log.error("faq_upload_create_entry_failed", e);
                 }
             }
 
             Map<String, Object> resp = Map.of("status", "ok", "created", created, "total", entries.size());
             HttpServer.sendJson(ctx, 200, MAPPER.writeValueAsString(resp));
         } catch (Exception e) {
-            log.error("上传 FAQ 文件失败", e);
+            log.error("faq_upload_file_failed", e);
             HttpServer.sendJson(ctx, 500, "{\"error\":\"上传 FAQ 失败: " + e.getMessage() + "\"}");
         }
     }
@@ -224,7 +224,7 @@ public class FaqController {
                     String embJson = MAPPER.writeValueAsString(Arrays.stream(emb).boxed().toList());
                     metaStore.createFaqQuestion(id, q, embJson);
                 } catch (Exception e) {
-                    log.warn("FAQ 问题向量化失败 question={}", truncate(q, 30), e);
+                    log.warn("faq_create_question_embed_failed question={}", truncate(q, 30), e);
                 }
             }
 
@@ -300,7 +300,7 @@ public class FaqController {
                 }
             }
         } catch (Exception e) {
-            log.warn("FAQ 匹配失败", e);
+            log.warn("faq_match_failed", e);
         }
         return null;
     }
@@ -335,7 +335,7 @@ public class FaqController {
                 String embJson = MAPPER.writeValueAsString(Arrays.stream(emb).boxed().toList());
                 metaStore.createFaqQuestion(entryId, q, embJson);
             } catch (Exception e) {
-                log.warn("FAQ 问题向量化失败 question={}", truncate(q, 30), e);
+                log.warn("faq_update_question_embed_failed question={}", truncate(q, 30), e);
             }
         }
     }
@@ -386,13 +386,23 @@ public class FaqController {
 
     private static long parseIdFromPath(String uri) {
         String path = HttpServer.sanitizePath(uri);
-        if (path.startsWith("/api/faq/")) {
-            String rest = path.substring(9);
-            int slashIdx = rest.indexOf('/');
-            if (slashIdx >= 0) rest = rest.substring(0, slashIdx);
+        String rest = extractIdFromPath(path, "/api/faq/", "/api/v1/faq/", "/open_api/faq/");
+        if (rest != null) {
             try { return Long.parseLong(rest); } catch (NumberFormatException ignored) {}
         }
         return 0;
+    }
+
+    private static String extractIdFromPath(String path, String... prefixes) {
+        for (String prefix : prefixes) {
+            if (path.startsWith(prefix)) {
+                String rest = path.substring(prefix.length());
+                int slashIdx = rest.indexOf('/');
+                if (slashIdx >= 0) rest = rest.substring(0, slashIdx);
+                return rest;
+            }
+        }
+        return null;
     }
 
     private static String truncate(String s, int maxLen) {

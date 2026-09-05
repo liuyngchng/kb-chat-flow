@@ -27,6 +27,8 @@ import { nodeTypes } from './nodes';
 import {
   exportToDesignDoc,
   importFromDesignDoc,
+  importFromDifyYaml,
+  isDifyYaml,
   exportToMarkdown,
   exportToAIPrompt,
   downloadJSON,
@@ -165,6 +167,28 @@ export default function App() {
         case 'note':
           newNode = { id, type: 'note', position, data: { nodeType: 'note', label: '便签', purpose: '', content: '', color: 'yellow' } };
           break;
+        // Dify 节点
+        case 'llm':
+          newNode = { id, type: 'llm', position, data: { nodeType: 'llm', label: '新 LLM', purpose: '', modelName: '', modelProvider: '', completionParams: '', systemPrompt: '', userPrompt: '', contextVar: '', memoryWindow: 0, outputVar: '', parallelGroup: '' } };
+          break;
+        case 'code':
+          newNode = { id, type: 'code', position, data: { nodeType: 'code', label: '新代码', purpose: '', code: '', inputVars: '', outputs: '', parallelGroup: '' } };
+          break;
+        case 'answer':
+          newNode = { id, type: 'answer', position, data: { nodeType: 'answer', label: '新回复', purpose: '', answerText: '', parallelGroup: '' } };
+          break;
+        case 'knowledge-retrieval':
+          newNode = { id, type: 'knowledge-retrieval', position, data: { nodeType: 'knowledge-retrieval', label: '新知识检索', purpose: '', datasetIds: '', queryVar: '', retrievalMode: 'multiple', topK: 3, rerankingModel: '', rerankingEnable: false, scoreThreshold: '', outputVar: '', parallelGroup: '' } };
+          break;
+        case 'question-classifier':
+          newNode = { id, type: 'question-classifier', position, data: { nodeType: 'question-classifier', label: '新分类器', purpose: '', classes: '', instructions: '', queryVar: '', modelName: '', modelProvider: '', memoryEnabled: false, parallelGroup: '' } };
+          break;
+        case 'assigner':
+          newNode = { id, type: 'assigner', position, data: { nodeType: 'assigner', label: '新赋值', purpose: '', items: '', parallelGroup: '' } };
+          break;
+        case 'if-else':
+          newNode = { id, type: 'if-else', position, data: { nodeType: 'if-else', label: '新条件分支', purpose: '', cases: '', parallelGroup: '' } };
+          break;
         default:
           return;
       }
@@ -238,25 +262,43 @@ export default function App() {
   const onImport = useCallback(() => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.json';
+    input.accept = '.json,.yml,.yaml';
     input.onchange = (e: Event) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (re) => {
+        const text = re.target?.result as string;
         try {
-          const doc: DesignDoc = JSON.parse(re.target?.result as string);
-          setWorkflowName(doc.name || '');
-          setWorkflowDesc(doc.description || '');
-          setWorkflowPurpose(doc.purpose || '');
-          setWorkflowTags((doc.metadata?.tags || []).join(', '));
-          const { nodes: newNodes, edges: newEdges } = importFromDesignDoc(doc);
-          setNodes(newNodes);
-          setEdges(newEdges);
-          setSelectedNode(null);
-          // 导入后清空历史
-          pushHistory(newNodes, newEdges);
-        } catch { alert('导入失败：JSON 格式不正确'); }
+          // 判断是否为 Dify YAML 格式
+          if (isDifyYaml(text)) {
+            const { nodes: newNodes, edges: newEdges, workflowName: wfName, workflowDesc: wfDesc } = importFromDifyYaml(text);
+            setWorkflowName(wfName || '');
+            setWorkflowDesc(wfDesc || '');
+            setWorkflowPurpose('');
+            setWorkflowTags('');
+            setNodes(newNodes);
+            setEdges(newEdges);
+            setSelectedNode(null);
+            pushHistory(newNodes, newEdges);
+          } else {
+            // JSON 格式
+            const doc: DesignDoc = JSON.parse(text);
+            setWorkflowName(doc.name || '');
+            setWorkflowDesc(doc.description || '');
+            setWorkflowPurpose(doc.purpose || '');
+            setWorkflowTags((doc.metadata?.tags || []).join(', '));
+            const { nodes: newNodes, edges: newEdges } = importFromDesignDoc(doc);
+            setNodes(newNodes);
+            setEdges(newEdges);
+            setSelectedNode(null);
+            // 导入后清空历史
+            pushHistory(newNodes, newEdges);
+          }
+        } catch (err) {
+          console.error('导入失败:', err);
+          alert('导入失败：文件格式不正确，请查看浏览器控制台（F12）获取详细信息');
+        }
       };
       reader.readAsText(file);
     };
@@ -644,7 +686,7 @@ function Toolbar({
         <button style={btnBase} onClick={onAutoLayout} title="自动布局 — 按拓扑层级整理节点">
           <i className="fas fa-arrows-alt" /> 自动布局
         </button>
-        <button style={btnBase} onClick={onImport} title="导入 JSON">
+        <button style={btnBase} onClick={onImport} title="导入 JSON/YAML">
           <i className="fas fa-upload" /> 导入
         </button>
         <button style={btnBase} onClick={onExport} title="导出自描述 JSON (Ctrl+S)">

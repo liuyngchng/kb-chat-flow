@@ -1045,6 +1045,42 @@ footer {
 }
 
 /* ============================================================
+   通用按钮（系统管理页 config.html 与密码弹窗共用）
+   ============================================================ */
+.cfg-btn {
+    padding: 11px 28px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cfg-btn-save {
+    background: linear-gradient(135deg, #4b6cb7, #3a5a9e);
+    color: white;
+}
+
+.cfg-btn-save:hover {
+    background: linear-gradient(135deg, #3a5a9e, #2c487e);
+    box-shadow: 0 4px 12px rgba(75, 108, 183, 0.3);
+    transform: translateY(-1px);
+}
+
+.cfg-btn-reset {
+    background: #f0f0f0;
+    color: #555;
+}
+
+.cfg-btn-reset:hover {
+    background: #e0e0e0;
+}
+
+/* ============================================================
    响应式
    ============================================================ */
 @media (max-width: 768px) {

@@ -89,7 +89,7 @@ func (h *AgentHandler) Get(c *gin.Context) {
 // validateSystemPrompt 校验提示词中的系统变量引用
 func validateSystemPrompt(prompt string) error {
 	if invalid := engine.ValidateTemplateVars(prompt); len(invalid) > 0 {
-		slog.Warn("agent system_prompt rejected: invalid variables", "invalid", invalid)
+		slog.Warn("agent_system_prompt_invalid_vars", "invalid", invalid)
 		return fmt.Errorf("system_prompt 包含非法的系统变量：%s", strings.Join(invalid, "、"))
 	}
 	return nil

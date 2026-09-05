@@ -284,7 +284,7 @@ func (h *ConfigHandler) UpdateConfig(c *gin.Context) {
 
 	// 通知其他节点配置已变更（集群模式下通过 Redis Pub/Sub 广播）
 	if err := h.notifier.NotifyChange(); err != nil {
-		slog.Warn("配置变更通知失败", "error", err)
+		slog.Warn("config_handler_notify_change_failed", "error", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
@@ -313,7 +313,7 @@ func (h *ConfigHandler) TestModels(c *gin.Context) {
 		_, err := client.Chat("你是一个助手，请回复 OK。", "hi")
 		elapsed := time.Since(t0).Milliseconds()
 		if err != nil {
-			slog.Warn("model test: LLM failed", "error", err)
+			slog.Warn("config_handler_model_test_llm_failed", "error", err)
 			results = append(results, ModelTestResult{Name: "LLM 对话模型", OK: false, Message: err.Error(), Elapsed: elapsed})
 		} else {
 			results = append(results, ModelTestResult{Name: "LLM 对话模型", OK: true, Message: "连接成功", Elapsed: elapsed})
@@ -329,7 +329,7 @@ func (h *ConfigHandler) TestModels(c *gin.Context) {
 		dim, err := client.Dimension()
 		elapsed := time.Since(t0).Milliseconds()
 		if err != nil {
-			slog.Warn("model test: Embedding failed", "error", err)
+			slog.Warn("config_handler_model_test_embedding_failed", "error", err)
 			results = append(results, ModelTestResult{Name: "Embedding 向量模型", OK: false, Message: err.Error(), Elapsed: elapsed})
 		} else {
 			results = append(results, ModelTestResult{Name: "Embedding 向量模型", OK: true, Message: fmt.Sprintf("连接成功 (dim=%d)", dim), Elapsed: elapsed})
@@ -345,7 +345,7 @@ func (h *ConfigHandler) TestModels(c *gin.Context) {
 		_, err := client.Rerank("test", []string{"hello world", "goodbye"}, 1)
 		elapsed := time.Since(t0).Milliseconds()
 		if err != nil {
-			slog.Warn("model test: Rerank failed", "error", err)
+			slog.Warn("config_handler_model_test_rerank_failed", "error", err)
 			results = append(results, ModelTestResult{Name: "Rerank 重排序模型", OK: false, Message: err.Error(), Elapsed: elapsed})
 		} else {
 			results = append(results, ModelTestResult{Name: "Rerank 重排序模型", OK: true, Message: "连接成功", Elapsed: elapsed})

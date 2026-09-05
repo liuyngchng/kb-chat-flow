@@ -118,7 +118,7 @@ public class AuthController {
             HttpServer.sendJson(ctx, 200, MAPPER.writeValueAsString(resp));
 
         } catch (Exception e) {
-            log.error("登录失败", e);
+            log.error("auth_login_failed", e);
             HttpServer.sendJson(ctx, 500, "{\"error\":\"登录失败: " + e.getMessage() + "\"}");
         }
     }
@@ -137,7 +137,7 @@ public class AuthController {
             TokenProvider.blacklistToken(token);
         }
         // Clear auth cookie
-        clearAuthCookie(ctx);
+        clearAuthCookie(ctx, request);
         HttpServer.sendJson(ctx, 200, "{\"status\":\"ok\"}");
     }
 
@@ -225,9 +225,10 @@ public class AuthController {
         request.headers().set("X-Set-Cookie", cookie);
     }
 
-    private static void clearAuthCookie(ChannelHandlerContext ctx) {
-        // Cookie clearing is handled by the response path
-        // The HttpServer will add the clear-cookie header
+        private static void clearAuthCookie(ChannelHandlerContext ctx, FullHttpRequest request) {
+        // 通过 X-Set-Cookie 机制下发清除 Cookie（HttpServer 会转成标准 Set-Cookie）
+        String cookie = String.format("%s=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict", COOKIE_AUTH_TOKEN);
+        request.headers().set("X-Set-Cookie", cookie);
     }
 
     // ============================================================

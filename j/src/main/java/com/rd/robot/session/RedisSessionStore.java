@@ -40,7 +40,7 @@ public class RedisSessionStore implements SessionStore {
             ChatMessage[] msgs = MAPPER.readValue(json, ChatMessage[].class);
             return Arrays.asList(msgs);
         } catch (Exception e) {
-            log.warn("解析 Redis 会话历史失败 uid={}", uid, e);
+            log.warn("session_redis_parse_history_failed uid={}", uid, e);
             return Collections.emptyList();
         }
     }
@@ -59,7 +59,7 @@ public class RedisSessionStore implements SessionStore {
             String json = MAPPER.writeValueAsString(history);
             redisClient.setex(key(uid), TTL_SECONDS, json);
         } catch (JsonProcessingException e) {
-            log.error("序列化会话历史失败 uid={}", uid, e);
+            log.error("session_redis_serialize_history_failed uid={}", uid, e);
         }
     }
 

@@ -10,6 +10,14 @@ const nodeTypes = [
   { type: 'tool', label: '工具', icon: 'fa-wrench', color: '#4b6cb7', desc: '自定义工具调用' },
   { type: 'branch', label: '条件分支', icon: 'fa-code-branch', color: '#e67e22', desc: '按变量值分流（类似 switch/case）' },
   { type: 'note', label: '便签', icon: 'fa-sticky-note', color: '#f9a825', desc: '注释/便签，仅供说明' },
+  // Dify 节点
+  { type: 'llm', label: 'LLM 调用', icon: 'fa-brain', color: '#10b981', desc: '调用大语言模型' },
+  { type: 'code', label: '代码执行', icon: 'fa-code', color: '#f59e0b', desc: '执行 Python 代码' },
+  { type: 'answer', label: '回复输出', icon: 'fa-comment-dots', color: '#3b82f6', desc: '输出回复内容' },
+  { type: 'knowledge-retrieval', label: '知识检索', icon: 'fa-book', color: '#8b5cf6', desc: '从知识库检索相关内容' },
+  { type: 'question-classifier', label: '问题分类器', icon: 'fa-tags', color: '#06b6d4', desc: '对用户问题进行分类' },
+  { type: 'assigner', label: '变量赋值', icon: 'fa-list-check', color: '#6b7280', desc: '为会话变量赋值' },
+  { type: 'if-else', label: 'IF/ELSE 分支', icon: 'fa-code-branch', color: '#ef4444', desc: '条件判断分支' },
 ] as const;
 
 // ============================================================
@@ -105,6 +113,7 @@ export function Sidebar() {
     { label: '处理节点', types: ['agent', 'tool'] },
     { label: '数据 & 路由', types: ['branch'] },
     { label: '注释', types: ['note'] },
+    { label: 'Dify 节点', types: ['llm', 'code', 'answer', 'knowledge-retrieval', 'question-classifier', 'assigner', 'if-else'] },
   ];
 
   return (

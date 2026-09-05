@@ -114,7 +114,7 @@ func (m *Manager) CreateKB(name, uid string, isPublic bool) (int64, error) {
 	// 探测 embedding 维度并初始化 collection
 	dim, err := m.getEmbClient().Dimension()
 	if err != nil {
-		slog.Error("创建知识库失败: 探测 embedding 维度",
+		slog.Error("kb_create_dimension_probe_failed",
 			"kbName", name,
 			"embedURI", m.cfg.API.EmbeddingAPIURI,
 			"embedModel", m.cfg.API.EmbeddingModelName,
@@ -333,7 +333,7 @@ func (m *Manager) SearchInKB(query string, vdbID int64, uid string, topK int, sc
 
 		rerankResults, err := m.rerankClient.Rerank(query, docs, topK)
 		if err != nil {
-			slog.Warn("rerank 失败，回退到原始排序", "error", err)
+			slog.Warn("kb_rerank_failed_fallback", "error", err)
 			// 回退：使用原始顺序的前 topK 条
 			results = results[:topK]
 		} else {
@@ -367,7 +367,7 @@ func (m *Manager) SearchInKBs(query string, vdbIDs []int64, uid string, topK int
 	for _, vdbID := range vdbIDs {
 		ctx, err := m.SearchInKB(query, vdbID, uid, topK, scoreThreshold)
 		if err != nil {
-			slog.Error("搜索知识库失败", "vdbID", vdbID, "error", err)
+			slog.Error("kb_search_in_kb_failed", "vdb_id", vdbID, "error", err)
 			continue
 		}
 		if ctx != "" {
@@ -388,7 +388,7 @@ func (m *Manager) SearchInKBs(query string, vdbIDs []int64, uid string, topK int
 func (m *Manager) SearchAllKBs(query string, uid string, topK int, scoreThreshold float64) string {
 	kbList, err := m.store.GetUserVdbs(uid)
 	if err != nil {
-		slog.Error("获取知识库列表失败", "error", err)
+		slog.Error("kb_get_list_failed", "error", err)
 		return ""
 	}
 
@@ -396,7 +396,7 @@ func (m *Manager) SearchAllKBs(query string, uid string, topK int, scoreThreshol
 	for _, kb := range kbList {
 		ctx, err := m.SearchInKB(query, kb.ID, uid, topK, scoreThreshold)
 		if err != nil {
-			slog.Error("搜索知识库失败", "kb", kb.Name, "error", err)
+			slog.Error("kb_search_all_kbs_failed", "kb", kb.Name, "error", err)
 			continue
 		}
 		if ctx != "" {
@@ -416,14 +416,14 @@ func (m *Manager) SearchAllKBs(query string, uid string, topK int, scoreThreshol
 // 单例模式：直接轮询处理。
 // 集群模式：通过 Redis 分布式锁确保同一时间只有一个节点处理。
 func (m *Manager) StartFileWorker() {
-	slog.Info("文件处理 worker 已启动", "cluster_mode", m.redisClient != nil)
+	slog.Info("kb_file_worker_started", "cluster_mode", m.redisClient != nil)
 	ticker := time.NewTicker(FilePollInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-m.stopCh:
-			slog.Info("文件处理 worker 已停止")
+			slog.Info("kb_file_worker_stopped")
 			return
 		case <-ticker.C:
 			// 集群模式：获取分布式锁
@@ -447,7 +447,7 @@ func (m *Manager) tryAcquireWorkerLock() bool {
 
 	ok, err := m.redisClient.SetNX(ctx, workerLockKey, hostname(), workerLockTTL)
 	if err != nil {
-		slog.Warn("worker lock acquire failed", "error", err)
+		slog.Warn("kb_worker_lock_acquire_failed", "error", err)
 		return false
 	}
 	return ok
@@ -459,7 +459,7 @@ func (m *Manager) releaseWorkerLock() {
 	defer cancel()
 
 	if err := m.redisClient.Del(ctx, workerLockKey); err != nil {
-		slog.Warn("worker lock release failed", "error", err)
+		slog.Warn("kb_worker_lock_release_failed", "error", err)
 	}
 }
 
@@ -481,13 +481,13 @@ func (m *Manager) StopFileWorker() {
 func (m *Manager) processPendingFiles() {
 	files, err := m.store.GetUnprocessedFiles()
 	if err != nil {
-		slog.Error("获取待处理文件失败", "error", err)
+		slog.Error("kb_get_pending_files_failed", "error", err)
 		return
 	}
 
 	for _, f := range files {
 		if err := m.processFile(&f); err != nil {
-			slog.Error("处理文件失败", "file", f.Name, "error", err)
+			slog.Error("kb_process_file_failed", "file", f.Name, "error", err)
 			m.store.UpdateFileProgress(f.ID, 0, fmt.Sprintf("处理失败: %v", err))
 		}
 	}
@@ -495,7 +495,7 @@ func (m *Manager) processPendingFiles() {
 
 // processFile 处理单个文件（向量化入库）
 func (m *Manager) processFile(finfo *model.VdbFileInfo) error {
-	slog.Info("开始处理文件", "name", finfo.Name, "id", finfo.ID)
+	slog.Info("kb_process_file_start", "name", finfo.Name, "id", finfo.ID)
 	m.store.UpdateFileProgress(finfo.ID, 1, "开始处理文档")
 
 	// 集群模式（S3）：先下载到本地临时文件，处理完后清理
@@ -540,7 +540,7 @@ func (m *Manager) processFile(finfo *model.VdbFileInfo) error {
 		return nil
 	}
 
-	slog.Info("文件已切分", "name", finfo.Name, "chunks", len(chunks))
+	slog.Info("kb_file_chunked", "name", finfo.Name, "chunks", len(chunks))
 	m.store.UpdateFileProgress(finfo.ID, 5, fmt.Sprintf("已切分为 %d 个文本块，开始向量化", len(chunks)))
 
 	// 初始化向量存储
@@ -551,7 +551,7 @@ func (m *Manager) processFile(finfo *model.VdbFileInfo) error {
 
 	dim, err := m.getEmbClient().Dimension()
 	if err != nil {
-		slog.Error("处理文件失败: 探测 embedding 维度",
+		slog.Error("kb_process_file_dimension_probe_failed",
 			"file", finfo.Name,
 			"embedURI", m.cfg.API.EmbeddingAPIURI,
 			"embedModel", m.cfg.API.EmbeddingModelName,
@@ -621,7 +621,7 @@ func (m *Manager) processFile(finfo *model.VdbFileInfo) error {
 	bar.Finish()
 
 	m.store.UpdateFileProgress(finfo.ID, 100, fmt.Sprintf("处理完成，共 %d 个文本块", totalChunks))
-	slog.Info("文件处理完成", "name", finfo.Name)
+	slog.Info("kb_process_file_done", "name", finfo.Name)
 	return nil
 }
 

@@ -102,10 +102,10 @@ public class WorkflowEngine {
                         ftPredictor.train(workflow.getClassifier().getCategories(),
                                 workflow.getClassifier().getPrompt());
                     } catch (Exception e) {
-                        log.warn("fastText train failed, will skip fastText tier: {}", e.getMessage());
+                        log.warn("engine_fasttext_train_failed {}", e.getMessage());
                     }
 
-                    log.info("classifier start workflow={}", workflow.getName());
+                    log.info("engine_classifier_start workflow={}", workflow.getName());
                     long classifyStart = System.currentTimeMillis();
 
                     String intent = IntentClassifier.classify(
@@ -126,7 +126,7 @@ public class WorkflowEngine {
 
                     eventQueue.offer(new EngineEvent("progress", 0, total, "意图分类: " + intent, ""));
 
-                    log.info("classifier done workflow={} intent={} duration_ms={} query={}",
+                    log.info("engine_classifier_done workflow={} intent={} duration_ms={} query={}",
                             workflow.getName(), intent, classifyElapsed, truncate(userQuery, 50));
                 }
 
@@ -138,11 +138,11 @@ public class WorkflowEngine {
                 }
 
                 // Send completion event
-                log.info("workflow nodes done workflow={} total_nodes={}", workflow.getName(), total);
+                log.info("engine_workflow_nodes_done workflow={} total_nodes={}", workflow.getName(), total);
                 eventQueue.offer(new EngineEvent("done", total, total, "", ""));
 
             } catch (Exception e) {
-                log.error("workflow execution error", e);
+                log.error("engine_workflow_execution_error", e);
                 eventQueue.offer(new EngineEvent("error", "工作流执行失败: " + e.getMessage()));
             }
         }).start();
@@ -303,7 +303,7 @@ public class WorkflowEngine {
     private void executeLinear(BlockingQueue<EngineEvent> eventQueue,
                                List<WorkflowNode> nodes, Map<String, String> vars,
                                String classifierOutputVar, String uid, String userQuery) {
-        log.info("workflow nodes start (linear) total_nodes={}", nodes.size());
+        log.info("engine_linear_nodes_start total_nodes={}", nodes.size());
         int stepCounter = 0;
         int total = nodes.size();
 
@@ -314,7 +314,7 @@ public class WorkflowEngine {
             if (node.getCondition() != null && !node.getCondition().isEmpty()) {
                 String currentIntent = vars.get(classifierOutputVar);
                 if (!node.getCondition().equals(currentIntent)) {
-                    log.info("skip node by condition node={} agent_name={} condition={} current_intent={}",
+                    log.info("engine_skip_node_linear node={} agent_name={} condition={} current_intent={}",
                             node.getId(), node.getAgentName(), node.getCondition(), currentIntent);
                     continue;
                 }
@@ -334,7 +334,7 @@ public class WorkflowEngine {
                             WorkflowDef workflow, List<WorkflowNode> nodes,
                             Map<String, String> vars, String classifierOutputVar,
                             String uid, String userQuery) {
-        log.info("workflow nodes start (DAG) total_nodes={}", nodes.size());
+        log.info("engine_dag_nodes_start total_nodes={}", nodes.size());
 
         Map<String, DagNode> dag;
         List<List<WorkflowNode>> levels;
@@ -346,21 +346,21 @@ public class WorkflowEngine {
             return;
         }
 
-        log.info("dag levels computed levels={}", levels.size());
+        log.info("engine_dag_levels_computed levels={}", levels.size());
 
         // Per-level executor service for parallel execution
         ExecutorService executor = Executors.newCachedThreadPool();
 
         for (int li = 0; li < levels.size(); li++) {
             List<WorkflowNode> level = levels.get(li);
-            log.info("dag level start level={} nodes={} total_levels={}", li + 1, level.size(), levels.size());
+            log.info("engine_dag_level_start level={} nodes={} total_levels={}", li + 1, level.size(), levels.size());
 
             if (level.size() == 1) {
                 // Single node: execute synchronously
                 WorkflowNode node = level.get(0);
                 if (node.getCondition() != null && !node.getCondition().isEmpty()) {
                     if (!node.getCondition().equals(vars.get(classifierOutputVar))) {
-                        log.info("skip node by condition (DAG) node={} agent_name={} condition={}",
+                        log.info("engine_skip_node_dag node={} agent_name={} condition={}",
                                 node.getId(), node.getAgentName(), node.getCondition());
                         continue;
                     }
@@ -379,7 +379,7 @@ public class WorkflowEngine {
                 boolean hadError = executeParallelLevel(eventQueue, level, li + 1, levels.size(),
                         vars, uid, userQuery, classifierOutputVar, executor);
                 if (hadError) {
-                    log.warn("parallel level had errors, continuing");
+                    log.warn("engine_parallel_level_errors");
                 }
             }
         }
@@ -404,7 +404,7 @@ public class WorkflowEngine {
                     String intent;
                     synchronized (lock) { intent = vars.get(classifierOutputVar); }
                     if (!node.getCondition().equals(intent)) {
-                        log.info("skip node by condition (DAG parallel) node={} agent_name={} condition={}",
+                        log.info("engine_skip_node_dag_parallel node={} agent_name={} condition={}",
                                 node.getId(), node.getAgentName(), node.getCondition());
                         String label = node.getAgentName() + " (已跳过)";
                         EngineEvent progEvt = new EngineEvent("progress", step, total, label, "");
@@ -453,14 +453,14 @@ public class WorkflowEngine {
             return new EngineEvent("error", "节点 " + node.getId() + " 引用的智能体 (ID: " + node.getAgentId() + ") 不存在");
         }
 
-        log.info("node start node={} agent={} step={} total={}", node.getId(), agent.getName(), step, total);
+        log.info("engine_node_start node={} agent={} step={} total={}", node.getId(), agent.getName(), step, total);
 
         // Render input template
         String input;
         if (lock != null) { synchronized (lock) { input = TemplateResolver.resolve(node.getInputTemplate(), vars); } }
         else { input = TemplateResolver.resolve(node.getInputTemplate(), vars); }
 
-        log.info("node input ready node={} agent={} input_len={}", node.getId(), agent.getName(),
+        log.info("engine_node_input_ready node={} agent={} input_len={}", node.getId(), agent.getName(),
                 input != null ? input.length() : 0);
 
         // KB retrieval
@@ -474,7 +474,7 @@ public class WorkflowEngine {
 
         // LLM client
         LlmClient llmClient = getLlmClient(agent);
-        log.info("llm call start node={} agent={} model={} system_prompt_len={}",
+        log.info("engine_llm_call_start node={} agent={} model={} system_prompt_len={}",
                 node.getId(), agent.getName(), llmClient.getModelName(),
                 systemPrompt != null ? systemPrompt.length() : 0);
 
@@ -491,7 +491,7 @@ public class WorkflowEngine {
                 long llmElapsed = System.currentTimeMillis() - llmStart;
 
                 if (fullOutput == null) fullOutput = "[错误] LLM 返回空结果";
-                log.info("node done node={} agent={} type=sync duration_ms={} output_len={}",
+                log.info("engine_node_done_sync_final node={} agent={} type=sync duration_ms={} output_len={}",
                         node.getId(), agent.getName(), llmElapsed, fullOutput.length());
 
                 if (lock != null) { synchronized (lock) { vars.put(node.getOutputVar(), fullOutput); vars.put(node.getId(), fullOutput); } }
@@ -516,13 +516,13 @@ public class WorkflowEngine {
             long llmElapsed = System.currentTimeMillis() - llmStart;
 
             if (fullOutput == null) fullOutput = "[错误] LLM 返回空结果";
-            log.info("node done node={} agent={} type=sync duration_ms={} output_len={}",
+            log.info("engine_node_done_sync_non_final node={} agent={} type=sync duration_ms={} output_len={}",
                     node.getId(), agent.getName(), llmElapsed, fullOutput.length());
 
             if (lock != null) { synchronized (lock) { vars.put(node.getOutputVar(), fullOutput); vars.put(node.getId(), fullOutput); } }
             else { vars.put(node.getOutputVar(), fullOutput); vars.put(node.getId(), fullOutput); }
         } catch (Exception e) {
-            log.error("node error node={} agent={} error={}", node.getId(), agent.getName(), e.getMessage());
+            log.error("engine_node_error node={} agent={} error={}", node.getId(), agent.getName(), e.getMessage());
             String errorOutput = "[错误] " + e.getMessage();
             if (lock != null) { synchronized (lock) { vars.put(node.getOutputVar(), errorOutput); vars.put(node.getId(), errorOutput); } }
             else { vars.put(node.getOutputVar(), errorOutput); vars.put(node.getId(), errorOutput); }
@@ -559,7 +559,7 @@ public class WorkflowEngine {
             List<Long> vdbIds = MAPPER.readValue(agent.getVdbIds(), new TypeReference<List<Long>>() {});
             if (vdbIds.isEmpty()) return "";
 
-            log.info("kb search start node={} agent={} vdb_ids={}", "workflow", agent.getName(), vdbIds);
+            log.info("engine_kb_search_start node={} agent={} vdb_ids={}", "workflow", agent.getName(), vdbIds);
 
             long kbStart = System.currentTimeMillis();
             StringBuilder sb = new StringBuilder();
@@ -572,12 +572,12 @@ public class WorkflowEngine {
             }
             long kbElapsed = System.currentTimeMillis() - kbStart;
 
-            log.info("kb search done node={} agent={} kb_context_len={} duration_ms={}",
+            log.info("engine_kb_search_done node={} agent={} kb_context_len={} duration_ms={}",
                     "workflow", agent.getName(), sb.length(), kbElapsed);
 
             return sb.toString();
         } catch (Exception e) {
-            log.warn("KB retrieval failed for agent {}", agent.getName(), e);
+            log.warn("engine_kb_retrieval_failed agent={}", agent.getName(), e);
             return "";
         }
     }

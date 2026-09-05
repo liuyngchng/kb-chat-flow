@@ -42,7 +42,7 @@ public class MilvusVectorStore implements VectorStore {
                 .build();
         R<Boolean> hasResp = client.hasCollection(hasParam);
         if (hasResp.getStatus() == 0 && Boolean.TRUE.equals(hasResp.getData())) {
-            log.info("Milvus collection 已存在 name={}", COLLECTION_NAME);
+            log.info("vdb_milvus_collection_exists name={}", COLLECTION_NAME);
             client.loadCollection(LoadCollectionParam.newBuilder()
                     .withCollectionName(COLLECTION_NAME).build());
             return;
@@ -90,7 +90,7 @@ public class MilvusVectorStore implements VectorStore {
             throw new RuntimeException("创建索引失败: " + indexResp.getMessage());
         }
 
-        log.info("Milvus collection 已创建 name={} dim={}", COLLECTION_NAME, dimension);
+        log.info("vdb_milvus_collection_created name={} dim={}", COLLECTION_NAME, dimension);
 
         client.loadCollection(LoadCollectionParam.newBuilder()
                 .withCollectionName(COLLECTION_NAME).build());

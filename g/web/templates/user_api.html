@@ -61,7 +61,7 @@
 
         async function loadTokens() {
             try {
-                const resp = await authFetch('/api/user/tokens');
+                const resp = await authFetch('/api/v1/user/tokens');
                 const data = await resp.json();
                 const tokens = data.data || [];
                 const tbody = document.getElementById('tokensTbody');
@@ -84,7 +84,7 @@
         }
         async function genToken() {
             try {
-                const resp = await authFetch('/api/user/token', { method: 'POST' });
+                const resp = await authFetch('/api/v1/user/token', { method: 'POST' });
                 const data = await resp.json();
                 if (data.status === 'ok') {
                     document.getElementById('newTokenText').textContent = data.token;
@@ -99,7 +99,7 @@
         }
         async function loadLogs() {
             try {
-                const resp = await authFetch('/api/user/call-logs');
+                const resp = await authFetch('/api/v1/user/call-logs');
                 const data = await resp.json();
                 const logs = data.data || [];
                 const tbody = document.getElementById('logsTbody');

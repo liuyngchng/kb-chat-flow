@@ -8,7 +8,7 @@
 #   ./build.sh v1.0.0 --push    # 构建并推送
 #
 # 流程:
-#   1. 本地 (Ubuntu) 静态编译 Go 二进制
+#   1. 本地 (Ubuntu) 静态编译 Go 二进制 (garble 混淆)
 #   2. 打包进 Alpine 运行时镜像
 # ============================================================
 
@@ -28,14 +28,17 @@ err()   { echo -e "${RED}[ERR]${NC}   $*"; }
 # ---- 解析参数 ----
 TAG=""
 PUSH=false
+WINDOWS=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --push) PUSH=true ;;
+        --windows) WINDOWS=true ;;
         -h|--help)
-            echo "用法: $0 [<tag>] [--push]"
+            echo "用法: $0 [<tag>] [--push] [--windows]"
             echo ""
             echo "  <tag>      镜像标签，默认 latest"
             echo "  --push     构建后推送到仓库"
+            echo "  --windows  交叉编译 Windows amd64 exe（跳过 Docker 打包）"
             echo ""
             echo "环境变量:"
             echo "  IMAGE_NAME   镜像名，默认 kb-chat-flow"
@@ -63,7 +66,7 @@ if ! command -v go &>/dev/null; then
     exit 1
 fi
 
-if ! command -v docker &>/dev/null; then
+if ! $WINDOWS && ! command -v docker &>/dev/null; then
     err "docker 未安装或不在 PATH 中"
     exit 1
 fi
@@ -74,15 +77,30 @@ cd "$SCRIPT_DIR"
 # 删除旧二进制，防止手动 go build（非 CGO_ENABLED=0）残留的产物混入
 rm -f "$BINARY"
 
-info "本地编译 Go 二进制 (CGO_ENABLED=0)..."
-CGO_ENABLED=0 go build -ldflags="-s -w" -o "$BINARY" .
+if $WINDOWS; then
+    BINARY_NAME="${BINARY}.exe"
+    info "交叉编译 Windows amd64 exe (CGO_ENABLED=0, garble -literals)..."
+    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOTOOLCHAIN=local GOGARBLE=kb-chat-flow \
+        go run mvdan.cc/garble@v0.14.2 -literals build -o "$BINARY_NAME" .
+else
+    BINARY_NAME="$BINARY"
+    info "本地编译 Go 二进制 (CGO_ENABLED=0, garble -literals)..."
+    CGO_ENABLED=0 GOTOOLCHAIN=local GOGARBLE=kb-chat-flow \
+        go run mvdan.cc/garble@v0.14.2 -literals build -o "$BINARY_NAME" .
+fi
 
 # 自检：确认产物是静态链接
-if ! file "$BINARY" | grep -q "statically linked"; then
+if ! file "$BINARY_NAME" | grep -q "statically linked"; then
     err "编译产物不是静态链接！请检查 CGO_ENABLED 设置"
     exit 1
 fi
-info "编译完成: $SCRIPT_DIR/$BINARY（静态链接）"
+info "编译完成: $SCRIPT_DIR/$BINARY_NAME（静态链接）"
+
+# --windows 模式：只编译，跳过 Docker 和 release 打包
+if $WINDOWS; then
+    info "Windows exe 编译完成，跳过 Docker 打包"
+    exit 0
+fi
 
 # ---- Step 2: 准备 Docker 构建上下文 ----
 BUILD_DIR="$(mktemp -d -t kb-chat-flow_build_XXXXXX)"

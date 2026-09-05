@@ -8,8 +8,8 @@
 #   ./build.sh v1.0.0 --push    # 构建并推送
 #
 # 多阶段构建:
-#   Stage 1: Maven + JDK 21 编译
-#   Stage 2: JRE 21 Alpine 运行时
+#   Stage 1: Maven + JDK 17 编译 + ProGuard 混淆
+#   Stage 2: JRE 17 Alpine 运行时
 # ============================================================
 
 set -euo pipefail

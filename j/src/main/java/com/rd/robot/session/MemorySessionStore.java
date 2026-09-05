@@ -55,11 +55,11 @@ public class MemorySessionStore implements SessionStore {
                     loaded.setMessages(new ArrayList<>(msgs));
                     loaded.setUpdatedAt(System.currentTimeMillis());
                     sessions.put(uid, loaded);
-                    log.info("从 DB 恢复聊天历史 uid={} count={}", uid, msgs.size());
+                    log.info("session_memory_restore_history uid={} count={}", uid, msgs.size());
                     return msgs;
                 }
             } catch (Exception e) {
-                log.warn("从 DB 加载聊天历史失败 uid={} error={}", uid, e.getMessage());
+                log.warn("session_memory_load_history_failed uid={} error={}", uid, e.getMessage());
             }
         }
 
@@ -88,7 +88,7 @@ public class MemorySessionStore implements SessionStore {
                 try {
                     store.saveChatMessage(u, role, content);
                 } catch (Exception e) {
-                    log.warn("持久化聊天消息失败 uid={} error={}", u, e.getMessage());
+                    log.warn("session_memory_persist_message_failed uid={} error={}", u, e.getMessage());
                 }
             }).start();
         }
@@ -101,7 +101,7 @@ public class MemorySessionStore implements SessionStore {
             try {
                 store.clearChatMessages(uid);
             } catch (Exception e) {
-                log.warn("清空 DB 聊天历史失败 uid={} error={}", uid, e.getMessage());
+                log.warn("session_memory_clear_history_failed uid={} error={}", uid, e.getMessage());
             }
         }
     }

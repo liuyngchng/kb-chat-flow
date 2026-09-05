@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"kb-chat-flow/internal/model"
@@ -490,37 +491,85 @@ func scanMySQLUser(row *sql.Row) (*model.User, error) {
 	return &u, nil
 }
 
-// seedUsers 种子内置用户（仅当 users 表为空时）
-// 密码使用 bcrypt 哈希，密码与用户名相同
+// seedUsers 种子内置用户：
+//   - admin：内置管理员，密码随机生成、启动后 2 小时内有效，登录后强制修改密码。
+//   - api0：内置 API 调用用户。
+// 均按用户名检查，已存在则跳过，避免被注册功能抢注导致系统失去管理员。
 func (s *MySQLStore) seedUsers() error {
-	var count int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
-	if err != nil {
+	if err := s.seedAdminIfMissing(); err != nil {
 		return err
 	}
-	if count > 0 {
+	return s.seedAPI0IfMissing()
+}
+
+// seedAdminIfMissing 当 users 表中不存在 admin 用户时，创建内置管理员。
+// 随机密码打印到控制台和日志文件；登录后 2 小时内未修改则密码过期，需重置数据库。
+func (s *MySQLStore) seedAdminIfMissing() error {
+	row := s.db.QueryRow("SELECT user_name FROM users WHERE user_name = ?", "admin")
+	var name string
+	switch err := row.Scan(&name); err {
+	case nil:
+		return nil // 已有 admin，直接使用
+	case sql.ErrNoRows:
+		// 继续创建
+	default:
+		return err
+	}
+
+	// 生成随机初始密码（12 位字母数字）
+	adminPwd, err := randomPassword(12)
+	if err != nil {
+		return fmt.Errorf("生成 admin 随机密码失败: %w", err)
+	}
+
+	pwdHash, err := hashPassword(adminPwd)
+	if err != nil {
+		return fmt.Errorf("admin 密码哈希失败: %w", err)
+	}
+
+	// admin 密码 2 小时后过期，登录后强制修改（修改密码会清除过期时间）
+	expiresAt := time.Now().Add(adminPwdExpiry)
+	if _, err := s.db.Exec(
+		"INSERT INTO users (user_name, user_pwd, role, note, pwd_expires_at) VALUES (?, ?, ?, ?, ?)",
+		"admin", pwdHash, model.RoleAdmin, "内置管理员", expiresAt,
+	); err != nil {
+		return fmt.Errorf("种子用户 admin 插入失败: %w", err)
+	}
+
+	// 随机密码打印到控制台和日志文件
+	slog.Info("store_mysql_admin_account_created", "user_name", "admin", "initial_password", adminPwd, "expires_in", adminPwdExpiry.String())
+	fmt.Printf("\n========================================\n")
+	fmt.Printf("  首次运行已创建管理员账号 admin\n")
+	fmt.Printf("  初始密码: %s\n", adminPwd)
+	fmt.Printf("  该密码 %s 内有效，登录后需立即修改密码\n", adminPwdExpiryText)
+	fmt.Printf("  若忘记初始密码，请从 cfg.db.template 重置数据库后重启\n")
+	fmt.Printf("========================================\n\n")
+
+	return nil
+}
+
+// seedAPI0IfMissing 当 users 表中不存在 api0 用户时，创建内置 API 调用用户
+func (s *MySQLStore) seedAPI0IfMissing() error {
+	row := s.db.QueryRow("SELECT user_name FROM users WHERE user_name = ?", "api0")
+	var name string
+	switch err := row.Scan(&name); err {
+	case nil:
 		return nil
+	case sql.ErrNoRows:
+		// 继续创建
+	default:
+		return err
 	}
 
-	builtinUsers := []struct {
-		userName string
-		role     int
-		note     string
-	}{
-		{"api0", model.RoleAPI, "内置API调用用户"},
+	apiPwdHash, err := hashPassword("api0")
+	if err != nil {
+		return fmt.Errorf("api0 密码哈希失败: %w", err)
 	}
-
-	for _, u := range builtinUsers {
-		pwdHash, err := hashPassword(u.userName)
-		if err != nil {
-			return fmt.Errorf("种子用户 %s 密码哈希失败: %w", u.userName, err)
-		}
-		if _, err := s.db.Exec(
-			"INSERT INTO users (user_name, user_pwd, role, note) VALUES (?, ?, ?, ?)",
-			u.userName, pwdHash, u.role, u.note,
-		); err != nil {
-			return fmt.Errorf("种子用户 %s 插入失败: %w", u.userName, err)
-		}
+	if _, err := s.db.Exec(
+		"INSERT INTO users (user_name, user_pwd, role, note) VALUES (?, ?, ?, ?)",
+		"api0", apiPwdHash, model.RoleAPI, "内置API调用用户",
+	); err != nil {
+		return fmt.Errorf("种子用户 api0 插入失败: %w", err)
 	}
 	return nil
 }

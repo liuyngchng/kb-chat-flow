@@ -130,7 +130,7 @@ async function fetchQueryData(query) {
     currentBotMessage = addMessage('<div class="typing-indicator"><span></span><span></span><span></span> 思考中...</div>', 'bot');
 
     try {
-        const response = await authFetch('/api/chat', {
+        const response = await authFetch('/api/v1/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -279,7 +279,7 @@ async function newChat() {
         abortController.abort();
     }
     try {
-        await authFetch('/api/chat/clear', {
+        await authFetch('/api/v1/chat/clear', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({})
@@ -322,6 +322,7 @@ function showChangePwd() {
     document.getElementById('pwdModal').style.display = 'flex';
     document.getElementById('oldPwd').value = '';
     document.getElementById('newPwd').value = '';
+    document.getElementById('newPwd2').value = '';
     document.getElementById('pwdError').style.display = 'none';
 }
 function hideChangePwd() {
@@ -331,14 +332,20 @@ document.getElementById('pwdForm').addEventListener('submit', async function(e) 
     e.preventDefault();
     const oldPwd = document.getElementById('oldPwd').value.trim();
     const newPwd = document.getElementById('newPwd').value.trim();
+    const newPwd2 = document.getElementById('newPwd2').value.trim();
     const errDiv = document.getElementById('pwdError');
-    if (!oldPwd || !newPwd) {
+    if (!oldPwd || !newPwd || !newPwd2) {
         errDiv.textContent = '密码不能为空';
         errDiv.style.display = 'block';
         return;
     }
+    if (newPwd !== newPwd2) {
+        errDiv.textContent = '两次输入的新密码不一致';
+        errDiv.style.display = 'block';
+        return;
+    }
     try {
-        const resp = await authFetch('/api/user/password', {
+        const resp = await authFetch('/api/v1/user/password', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ old_pwd: oldPwd, new_pwd: newPwd })

@@ -72,7 +72,7 @@ func (s *QdrantStore) EnsureCollection(dimension int) error {
 		CollectionName: s.collectionName,
 	})
 	if err == nil {
-		slog.Info("Qdrant collection 已存在", "name", s.collectionName)
+		slog.Info("vdb_qdrant_collection_exists", "name", s.collectionName)
 		return nil
 	}
 
@@ -92,7 +92,7 @@ func (s *QdrantStore) EnsureCollection(dimension int) error {
 		return fmt.Errorf("创建 Qdrant collection 失败: %w", err)
 	}
 
-	slog.Info("Qdrant collection 已创建", "name", s.collectionName, "dim", dimension)
+	slog.Info("vdb_qdrant_collection_created", "name", s.collectionName, "dim", dimension)
 	return nil
 }
 
@@ -232,7 +232,7 @@ func (s *QdrantStore) Purge() error {
 		CollectionName: s.collectionName,
 	})
 	if err != nil {
-		slog.Warn("Qdrant 删除 collection 失败（可能不存在）", "name", s.collectionName, "error", err)
+		slog.Warn("vdb_qdrant_delete_collection_failed", "name", s.collectionName, "error", err)
 	}
 	return nil
 }

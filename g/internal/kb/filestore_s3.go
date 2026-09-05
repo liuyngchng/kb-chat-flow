@@ -54,10 +54,10 @@ func NewS3FileStore(cfg *model.Config) (*S3FileStore, error) {
 		if err := client.MakeBucket(ctx, cfg.OSS.Bucket, minio.MakeBucketOptions{}); err != nil {
 			return nil, fmt.Errorf("create bucket failed: %w", err)
 		}
-		slog.Info("S3 bucket created", "bucket", cfg.OSS.Bucket)
+		slog.Info("s3_bucket_created", "bucket", cfg.OSS.Bucket)
 	}
 
-	slog.Info("S3 file store ready", "endpoint", cfg.OSS.Endpoint, "bucket", cfg.OSS.Bucket, "type", cfg.OSS.Type)
+	slog.Info("s3_file_store_ready", "endpoint", cfg.OSS.Endpoint, "bucket", cfg.OSS.Bucket, "type", cfg.OSS.Type)
 	return &S3FileStore{client: client, bucket: cfg.OSS.Bucket}, nil
 }
 
@@ -156,7 +156,7 @@ func (s *S3FileStore) DownloadToTemp(path string) (string, func(), error) {
 
 	cleanup := func() {
 		if err := os.Remove(tmpFile.Name()); err != nil {
-			slog.Warn("cleanup temp file failed", "path", tmpFile.Name(), "error", err)
+			slog.Warn("s3_cleanup_temp_file_failed", "path", tmpFile.Name(), "error", err)
 		}
 	}
 

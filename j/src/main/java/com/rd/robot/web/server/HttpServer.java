@@ -38,6 +38,10 @@ public class HttpServer {
     // ThreadLocal for path parameters per request
     private static final ThreadLocal<Map<String, String>> PATH_PARAMS = ThreadLocal.withInitial(ConcurrentHashMap::new);
 
+    // ThreadLocal for the current request, so response helpers can emit Set-Cookie
+    // (AuthController sets X-Set-Cookie on the request; response layer converts it).
+    private static final ThreadLocal<FullHttpRequest> CURRENT_REQUEST = new ThreadLocal<>();
+
     // Security response headers
     private static final Map<String, String> SECURITY_HEADERS = Map.of(
             "Strict-Transport-Security", "max-age=31536000; includeSubDomains",
@@ -73,7 +77,7 @@ public class HttpServer {
                     });
 
             channel = bootstrap.bind(port).sync().channel();
-            log.info("HTTP 服务器已启动端口={}", port);
+            log.info("http_server_started port={}", port);
         } catch (Exception e) {
             throw new RuntimeException("启动 HTTP 服务器失败", e);
         }
@@ -103,12 +107,14 @@ public class HttpServer {
 
         @Override
         protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
+            CURRENT_REQUEST.set(request);
             String path = sanitizePath(request.uri());
             String method = request.method().name();
 
             // Static files
             if (path.startsWith("/static/")) {
                 serveStatic(ctx, path);
+                CURRENT_REQUEST.remove();
                 return;
             }
 
@@ -121,9 +127,13 @@ public class HttpServer {
                 try {
                     // Apply auth middleware based on path
                     if (requiresAuth(path)) {
-                        User user = authenticateRequest(request);
+                        User user = authenticateByScheme(path, request);
                         if (user == null) {
-                            sendJson(ctx, 401, "{\"error\":\"未提供有效认证 token\"}");
+                            if (path.startsWith("/open_api/")) {
+                                sendJson(ctx, 401, "{\"error\":\"未提供认证 token，请使用 Authorization: Bearer <token>\"}");
+                            } else {
+                                sendJson(ctx, 401, "{\"error\":\"未提供有效认证 token\"}");
+                            }
                             return;
                         }
                         // Check admin-only paths
@@ -135,65 +145,100 @@ public class HttpServer {
 
                     match.getHandler().handle(ctx, request);
                 } catch (Exception e) {
-                    log.error("处理请求失败 method={} path={}", method, path, e);
+                    log.error("http_server_handle_request_failed method={} path={}", method, path, e);
                     sendError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR, "内部服务器错误");
                 } finally {
                     PATH_PARAMS.remove();
+                    CURRENT_REQUEST.remove();
                 }
             } else {
+                CURRENT_REQUEST.remove();
                 sendError(ctx, HttpResponseStatus.NOT_FOUND, "404 Not Found");
             }
         }
 
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            log.error("HTTP 处理异常", cause);
+            log.error("http_server_handle_exception", cause);
             ctx.close();
         }
 
         private boolean requiresAuth(String path) {
-            // If API auth is disabled globally, skip token check
+            // /open_api/* is always authenticated (third-party API, Bearer header), independent of api_auth switch
+            if (path.startsWith("/open_api/")) return true;
+            // If API auth is disabled globally, skip token check for frontend API
             if (!config.getSys().isApiAuth()) return false;
-            // Only API routes need token authentication
-            if (!path.startsWith("/api/")) return false;
+            // Only API v1 routes need token authentication
+            if (!path.startsWith("/api/v1/")) return false;
             // Login API is public
             if (path.equals("/api/login")) return false;
             return true;
         }
 
+        /**
+         * 按路径选择认证方案：
+         *  - /open_api/*（第三方）: 仅接受 Authorization: Bearer header
+         *  - /api/v1/*（前端）:    仅接受 httpOnly Cookie
+         *  - 其他（兼容）:          Cookie 优先，Bearer 兜底
+         */
+        private User authenticateByScheme(String path, FullHttpRequest request) {
+            if (path.startsWith("/open_api/")) {
+                String tokenStr = TokenProvider.extractTokenFromBearer(
+                        request.headers().get(HttpHeaderNames.AUTHORIZATION));
+                return tokenStr != null ? TokenProvider.parseToken(tokenStr) : null;
+            }
+            if (path.startsWith("/api/v1/")) {
+                String tokenStr = TokenProvider.extractTokenFromCookie(
+                        request.headers().get(HttpHeaderNames.COOKIE));
+                return tokenStr != null ? TokenProvider.parseToken(tokenStr) : null;
+            }
+            // 兼容旧路径（/api/）: Cookie 优先，Bearer 兜底
+            return authenticateRequest(request);
+        }
+
         private boolean isAdminPath(String path, String method) {
             // Pages
             if (path.startsWith("/admin/")) return true;
+
+            // Normalize: strip /api/v1 and /open_api prefixes, then reuse the same admin-path rules.
+            String normalized = path;
+            if (path.startsWith("/api/v1/")) {
+                normalized = "/api/" + path.substring("/api/v1/".length());
+            } else if (path.startsWith("/open_api/")) {
+                normalized = "/api/" + path.substring("/open_api/".length());
+            }
+
             // Config write
-            if (path.equals("/api/config") && !"GET".equalsIgnoreCase(method)) return true;
-            if (path.equals("/api/config/test-models")) return true;
+            if (normalized.equals("/api/config") && !"GET".equalsIgnoreCase(method)) return true;
+            if (normalized.equals("/api/config/test-models")) return true;
             // VDB write
-            if (path.equals("/api/vdb") && ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method))) return true;
-            if (path.matches("/api/vdb/\\d+") && "DELETE".equalsIgnoreCase(method)) return true;
-            if (path.matches("/api/vdb/\\d+/default") && "PUT".equalsIgnoreCase(method)) return true;
-            if (path.matches("/api/vdb/\\d+/files") && "GET".equalsIgnoreCase(method)) return true;
-            if (path.matches("/api/vdb/\\d+/upload") && "POST".equalsIgnoreCase(method)) return true;
-            if (path.matches("/api/vdb/file/\\d+/progress")) return true;
-            if (path.matches("/api/vdb/file/\\d+/chunks")) return true;
-            if (path.matches("/api/vdb/file/\\d+/download")) return true;
-            if (path.startsWith("/api/vdb/file/") && path.endsWith("/delete")) return true;
-            if (path.startsWith("/api/vdb/bindings")) return true;
+            if (normalized.equals("/api/vdb") && ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method))) return true;
+            if (normalized.matches("/api/vdb/\\d+") && "DELETE".equalsIgnoreCase(method)) return true;
+            if (normalized.matches("/api/vdb/\\d+/default") && "PUT".equalsIgnoreCase(method)) return true;
+            if (normalized.matches("/api/vdb/\\d+/files") && "GET".equalsIgnoreCase(method)) return true;
+            if (normalized.matches("/api/vdb/\\d+/upload") && "POST".equalsIgnoreCase(method)) return true;
+            if (normalized.matches("/api/vdb/file/\\d+/progress")) return true;
+            if (normalized.matches("/api/vdb/file/\\d+/chunks")) return true;
+            if (normalized.matches("/api/vdb/file/\\d+/download")) return true;
+            if (normalized.startsWith("/api/vdb/file/") && normalized.endsWith("/delete")) return true;
+            if (normalized.startsWith("/api/vdb/bindings")) return true;
             // FAQ write
-            if (path.equals("/api/faq") && ("POST".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
-            if (path.equals("/api/faq/upload")) return true;
-            if (path.matches("/api/faq/\\d+") && ("PUT".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
+            if (normalized.equals("/api/faq") && ("POST".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
+            if (normalized.equals("/api/faq/upload")) return true;
+            if (normalized.matches("/api/faq/\\d+") && ("PUT".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
             // User management
-            if (path.equals("/api/users")) return true;
-            if (path.matches("/api/users/[^/]+")) return true;
+            if (normalized.equals("/api/users")) return true;
+            if (normalized.matches("/api/users/[^/]+")) return true;
             // Workflow write
-            if (path.equals("/api/workflows") && "POST".equalsIgnoreCase(method)) return true;
-            if (path.matches("/api/workflows/\\d+") && ("PUT".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
+            if (normalized.equals("/api/workflows") && "POST".equalsIgnoreCase(method)) return true;
+            if (normalized.matches("/api/workflows/\\d+") && ("PUT".equalsIgnoreCase(method) || "DELETE".equalsIgnoreCase(method))) return true;
             return false;
         }
 
         private User authenticateRequest(FullHttpRequest request) {
             String tokenStr = TokenProvider.extractToken(
                     request.headers().get(HttpHeaderNames.AUTHORIZATION),
+                    request.headers().get(HttpHeaderNames.COOKIE),
                     getQueryParam(request, "t")
             );
             if (tokenStr == null) return null;
@@ -251,6 +296,7 @@ public class HttpServer {
                 HttpVersion.HTTP_1_1, HttpResponseStatus.FOUND);
         response.headers().set(HttpHeaderNames.LOCATION, location);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
+        applySetCookie(response);
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
     }
 
@@ -263,6 +309,7 @@ public class HttpServer {
                 .set(HttpHeaderNames.CONTENT_TYPE, "application/json; charset=utf-8")
                 .set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
         applySecurityHeaders(response);
+        applySetCookie(response);
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
     }
 
@@ -274,7 +321,21 @@ public class HttpServer {
                 .set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=utf-8")
                 .set(HttpHeaderNames.CONTENT_LENGTH, response.content().readableBytes());
         applySecurityHeaders(response);
+        applySetCookie(response);
         ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    /**
+     * 将当前请求上由 AuthController 设置的 X-Set-Cookie 头转为标准 Set-Cookie 响应头。
+     * X-Set-Cookie 机制让登录/注销逻辑无需直接访问响应对象即可下发 Cookie。
+     */
+    private static void applySetCookie(FullHttpResponse response) {
+        FullHttpRequest request = CURRENT_REQUEST.get();
+        if (request == null) return;
+        String setCookie = request.headers().get("X-Set-Cookie");
+        if (setCookie != null && !setCookie.isEmpty()) {
+            response.headers().set(HttpHeaderNames.SET_COOKIE, setCookie);
+        }
     }
 
     private static void applySecurityHeaders(FullHttpResponse response) {

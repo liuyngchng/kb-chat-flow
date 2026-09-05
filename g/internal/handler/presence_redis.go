@@ -25,7 +25,7 @@ type RedisPresence struct {
 
 // NewRedisPresence 创建 Redis 在线状态存储
 func NewRedisPresence(client *redisclient.Client, db store.MetaStore) *RedisPresence {
-	slog.Info("presence store: using Redis")
+	slog.Info("presence_redis_store_init")
 	return &RedisPresence{client: client, db: db}
 }
 
@@ -38,7 +38,7 @@ func (p *RedisPresence) SetPresence(userName string, loginTime time.Time) {
 	val := strconv.FormatInt(loginTime.Unix(), 10)
 
 	if err := p.client.Set(ctx, key, val, presenceTTL); err != nil {
-		slog.Warn("redis set presence failed", "userName", userName, "error", err)
+		slog.Warn("presence_redis_set_failed", "userName", userName, "error", err)
 	}
 }
 
@@ -48,7 +48,7 @@ func (p *RedisPresence) RemovePresence(userName string) {
 	defer cancel()
 
 	if err := p.client.Del(ctx, presenceKeyPrefix+userName); err != nil {
-		slog.Warn("redis del presence failed", "userName", userName, "error", err)
+		slog.Warn("presence_redis_del_failed", "userName", userName, "error", err)
 	}
 }
 
@@ -65,7 +65,7 @@ func (p *RedisPresence) GetOnlineAgents() []OnlineAgent {
 	for {
 		keys, nextCursor, err := rdb.Scan(ctx, cursor, presenceKeyPrefix+"*", 50).Result()
 		if err != nil {
-			slog.Warn("redis scan presence failed", "error", err)
+			slog.Warn("presence_redis_scan_failed", "error", err)
 			break
 		}
 
@@ -115,7 +115,7 @@ func (p *RedisPresence) HasPresence(userName string) bool {
 
 	n, err := p.client.Exists(ctx, presenceKeyPrefix+userName)
 	if err != nil {
-		slog.Warn("redis exists presence failed", "userName", userName, "error", err)
+		slog.Warn("presence_redis_exists_failed", "userName", userName, "error", err)
 		return false
 	}
 	return n > 0
