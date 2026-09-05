@@ -68,9 +68,9 @@ func (h *VdbHandler) PubList(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": list})
 }
 
-// FileList 获取知识库文件列表 GET /api/vdb/:id/files
+// FileList 获取知识库文件列表 GET /api/vdb/files?id=
 func (h *VdbHandler) FileList(c *gin.Context) {
-	vdbID := getPathIntParam(c, "id")
+	vdbID := getQueryIntParam(c, "id")
 	files, err := h.kbMgr.GetFiles(vdbID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -82,10 +82,10 @@ func (h *VdbHandler) FileList(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": files})
 }
 
-// SetDefault 设置默认知识库 PUT /api/vdb/:id/default
+// SetDefault 设置默认知识库 PUT /api/vdb/default?id=
 func (h *VdbHandler) SetDefault(c *gin.Context) {
 	uid := getAuthUID(c)
-	vdbID := getPathIntParam(c, "id")
+	vdbID := getQueryIntParam(c, "id")
 	if err := h.kbMgr.SetDefaultKB(vdbID, uid); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -117,10 +117,10 @@ func (h *VdbHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "id": id})
 }
 
-// Delete 删除知识库 DELETE /api/vdb/:id
+// Delete 删除知识库 DELETE /api/vdb?id=
 func (h *VdbHandler) Delete(c *gin.Context) {
 	uid := getAuthUID(c)
-	vdbID := getPathIntParam(c, "id")
+	vdbID := getQueryIntParam(c, "id")
 	if err := h.kbMgr.DeleteKB(vdbID, uid); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -128,10 +128,10 @@ func (h *VdbHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-// Upload 上传文件到知识库 POST /api/vdb/:id/upload (multipart/form-data)
+// Upload 上传文件到知识库 POST /api/vdb/upload?id= (multipart/form-data)
 func (h *VdbHandler) Upload(c *gin.Context) {
 	uid := getAuthUID(c)
-	vdbID := getPathIntParam(c, "id")
+	vdbID := getQueryIntParam(c, "id")
 
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -167,9 +167,9 @@ func (h *VdbHandler) Upload(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok", "file": finfo})
 }
 
-// ProcessInfo 获取文件处理进度 GET /api/vdb/file/:id/progress
+// ProcessInfo 获取文件处理进度 GET /api/vdb/file/progress?file_id=
 func (h *VdbHandler) ProcessInfo(c *gin.Context) {
-	fileID := getPathIntParam(c, "id")
+	fileID := getQueryIntParam(c, "file_id")
 	finfo, err := h.store.GetFileByID(fileID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -219,9 +219,9 @@ func (h *VdbHandler) Search(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": result})
 }
 
-// Chunks 获取文件的分块列表 GET /api/vdb/file/:id/chunks
+// Chunks 获取文件的分块列表 GET /api/vdb/file/chunks?file_id=
 func (h *VdbHandler) Chunks(c *gin.Context) {
-	fileID := getPathIntParam(c, "id")
+	fileID := getQueryIntParam(c, "file_id")
 	if fileID == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的文件 ID"})
 		return
@@ -251,9 +251,9 @@ func (h *VdbHandler) Chunks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": chunks})
 }
 
-// Download 下载文件 GET /api/vdb/file/:id/download
+// Download 下载文件 GET /api/vdb/file/download?file_id=
 func (h *VdbHandler) Download(c *gin.Context) {
-	fileID := getPathIntParam(c, "id")
+	fileID := getQueryIntParam(c, "file_id")
 	if fileID == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的文件 ID"})
 		return
@@ -273,15 +273,22 @@ func (h *VdbHandler) Download(c *gin.Context) {
 	c.FileAttachment(finfo.FilePath, finfo.Name)
 }
 
-// FileDelete 删除文件 DELETE /api/vdb/file/:id
+// FileDelete 删除文件 DELETE /api/vdb/file?file_id=
 func (h *VdbHandler) FileDelete(c *gin.Context) {
 	uid := getAuthUID(c)
-	fileID := getPathIntParam(c, "id")
+	fileID := getQueryIntParam(c, "file_id")
 	if err := h.kbMgr.DeleteFile(fileID, uid); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+// getQueryIntParam 从 URL query 参数中解析 int64
+func getQueryIntParam(c *gin.Context, key string) int64 {
+	val := c.Query(key)
+	n, _ := strconv.ParseInt(val, 10, 64)
+	return n
 }
 
 // getPathIntParam 从 URL 路径参数中解析 int64

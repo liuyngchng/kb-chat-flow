@@ -22,7 +22,7 @@ var (
 )
 
 // SourceWidth 源码位置显示宽度（右对齐用）。
-// 按最坏情况计算：5 层缩写目录(9) + 文件名≤10 + ":"+4位行号(5) = 24
+// 按最坏情况计算：5 层缩写目录(9) + 文件名(无后缀)≤10 + ":"+4位行号(5) = 24
 const SourceWidth = 24
 
 // modulePrefix 模块名前缀，从完整函数名中剥离
@@ -123,9 +123,11 @@ func sourceLocation(src *slog.Source) string {
 	// 去掉包路径尾部的 '.'（如 "internal/kb." → "internal/kb"）
 	pkg = strings.TrimSuffix(pkg, ".")
 
-	// 包路径首字母缩写（每段取首字母）+ 文件名（basename）+ 行号
-	// 例如 "internal/kb" → "i/k"，输出 "i/k/manager.go:399"
-	return abbreviatePath(pkg) + "/" + filepath.Base(src.File) + ":" + strconv.Itoa(src.Line)
+	// 包路径首字母缩写（每段取首字母）+ 文件名（basename，无后缀）+ 行号
+	// 例如 "internal/kb" → "i/k"，输出 "i/k/manager:399"
+	name := filepath.Base(src.File)
+	name = name[:len(name)-len(filepath.Ext(name))]
+	return abbreviatePath(pkg) + "/" + name + ":" + strconv.Itoa(src.Line)
 }
 
 // abbreviatePath 将包路径每段缩写为首字母，用 '/' 连接。

@@ -65,8 +65,13 @@ func (h *AgentHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": agents})
 }
 
-// Get 获取单个 Agent 详情
+// Get 获取单个 Agent 详情（:id="public" 时返回公开列表）
 func (h *AgentHandler) Get(c *gin.Context) {
+	if c.Param("id") == "public" {
+		h.ListPublic(c)
+		return
+	}
+
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的 ID"})

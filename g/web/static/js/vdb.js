@@ -124,7 +124,7 @@ document.getElementById('deleteBtn').addEventListener('click', async function() 
     if (!currentKbId || !confirm('确定要删除该知识库吗？此操作不可恢复。')) return;
 
     try {
-        const resp = await authFetch('/api/v1/vdb/' + currentKbId, { method: 'DELETE' });
+        const resp = await authFetch('/api/v1/vdb?id=' + currentKbId, { method: 'DELETE' });
         const data = await resp.json();
         if (data.status === 'ok') {
             currentKbId = null;
@@ -153,7 +153,7 @@ document.getElementById('setDefaultBtn').addEventListener('click', async functio
     if (!currentKbId) return;
 
     try {
-        const resp = await authFetch('/api/v1/vdb/' + currentKbId + '/default', { method: 'PUT' });
+        const resp = await authFetch('/api/v1/vdb/default?id=' + currentKbId, { method: 'PUT' });
         const data = await resp.json();
         if (data.status === 'ok') {
             refreshKbList();
@@ -172,7 +172,7 @@ document.getElementById('setDefaultBtn').addEventListener('click', async functio
 
 async function loadFileList(vdbId) {
     try {
-        const resp = await authFetch('/api/v1/vdb/' + vdbId + '/files');
+        const resp = await authFetch('/api/v1/vdb/files?id=' + vdbId);
         const data = await resp.json();
         renderFileList(data.data || []);
         document.getElementById('fileListContainer').style.display = 'block';
@@ -210,7 +210,7 @@ async function deleteFile(fileId) {
     if (!confirm('确定要删除该文件吗？')) return;
 
     try {
-        const resp = await authFetch('/api/v1/vdb/file/' + fileId, { method: 'DELETE' });
+        const resp = await authFetch('/api/v1/vdb/file?file_id=' + fileId, { method: 'DELETE' });
         const data = await resp.json();
         if (data.status === 'ok' && currentKbId) {
             loadFileList(currentKbId);
@@ -300,7 +300,7 @@ startBtn.addEventListener('click', async function() {
         fd.append('file', file);
 
         try {
-            const resp = await authFetch('/api/v1/vdb/' + currentKbId + '/upload', {
+            const resp = await authFetch('/api/v1/vdb/upload?id=' + currentKbId, {
                 method: 'POST',
                 body: fd
             });

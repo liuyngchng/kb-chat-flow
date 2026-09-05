@@ -289,7 +289,6 @@ func main() {
 
 		// AI Agent（读）
 		v1.GET("/ai-agents", h.Agent.List)
-		v1.GET("/ai-agents/public", h.Agent.ListPublic)
 		v1.GET("/ai-agents/:id", h.Agent.Get)
 
 		// 系统变量列表
@@ -354,14 +353,14 @@ func main() {
 
 			// 知识库（VDB）—— 写操作
 			adminAPI.POST("/vdb", h.Vdb.Create)
-			adminAPI.DELETE("/vdb/:id", h.Vdb.Delete)
-			adminAPI.PUT("/vdb/:id/default", h.Vdb.SetDefault)
-			adminAPI.GET("/vdb/:id/files", h.Vdb.FileList)
-			adminAPI.POST("/vdb/:id/upload", h.Vdb.Upload)
-			adminAPI.GET("/vdb/file/:id/progress", h.Vdb.ProcessInfo)
-			adminAPI.GET("/vdb/file/:id/chunks", h.Vdb.Chunks)
-			adminAPI.GET("/vdb/file/:id/download", h.Vdb.Download)
-			adminAPI.DELETE("/vdb/file/:id", h.Vdb.FileDelete)
+			adminAPI.DELETE("/vdb", h.Vdb.Delete)
+			adminAPI.PUT("/vdb/default", h.Vdb.SetDefault)
+			adminAPI.GET("/vdb/files", h.Vdb.FileList)
+			adminAPI.POST("/vdb/upload", h.Vdb.Upload)
+			adminAPI.GET("/vdb/file/progress", h.Vdb.ProcessInfo)
+			adminAPI.GET("/vdb/file/chunks", h.Vdb.Chunks)
+			adminAPI.GET("/vdb/file/download", h.Vdb.Download)
+			adminAPI.DELETE("/vdb/file", h.Vdb.FileDelete)
 		}
 	}
 
@@ -391,7 +390,6 @@ func main() {
 		openAPI.GET("/info", h.Config.Info)
 		openAPI.POST("/classifier/test", h.Chat.TestClassifier)
 		openAPI.GET("/ai-agents", h.Agent.List)
-		openAPI.GET("/ai-agents/public", h.Agent.ListPublic)
 		openAPI.GET("/ai-agents/:id", h.Agent.Get)
 		openAPI.GET("/system-vars", h.Agent.ListSystemVars)
 		openAPI.GET("/faq", h.Faq.List)
@@ -440,14 +438,14 @@ func main() {
 			openAPIAdmin.PUT("/workflows/:id", h.Workflow.Update)
 			openAPIAdmin.DELETE("/workflows/:id", h.Workflow.Delete)
 			openAPIAdmin.POST("/vdb", h.Vdb.Create)
-			openAPIAdmin.DELETE("/vdb/:id", h.Vdb.Delete)
-			openAPIAdmin.PUT("/vdb/:id/default", h.Vdb.SetDefault)
-			openAPIAdmin.GET("/vdb/:id/files", h.Vdb.FileList)
-			openAPIAdmin.POST("/vdb/:id/upload", h.Vdb.Upload)
-			openAPIAdmin.GET("/vdb/file/:id/progress", h.Vdb.ProcessInfo)
-			openAPIAdmin.GET("/vdb/file/:id/chunks", h.Vdb.Chunks)
-			openAPIAdmin.GET("/vdb/file/:id/download", h.Vdb.Download)
-			openAPIAdmin.DELETE("/vdb/file/:id", h.Vdb.FileDelete)
+			openAPIAdmin.DELETE("/vdb", h.Vdb.Delete)
+			openAPIAdmin.PUT("/vdb/default", h.Vdb.SetDefault)
+			openAPIAdmin.GET("/vdb/files", h.Vdb.FileList)
+			openAPIAdmin.POST("/vdb/upload", h.Vdb.Upload)
+			openAPIAdmin.GET("/vdb/file/progress", h.Vdb.ProcessInfo)
+			openAPIAdmin.GET("/vdb/file/chunks", h.Vdb.Chunks)
+			openAPIAdmin.GET("/vdb/file/download", h.Vdb.Download)
+			openAPIAdmin.DELETE("/vdb/file", h.Vdb.FileDelete)
 		}
 	}
 
